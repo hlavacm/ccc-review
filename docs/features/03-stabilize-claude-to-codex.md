@@ -149,6 +149,7 @@ Codex CLI 0.155.1; `model_reasoning_effort` values and `CODEX_API_KEY` for `code
 ### Real-use checklist results
 
 - 2026-09-19 `pnpm test:smoke` (real Codex CLI 0.155.1, disposable repo, outside the development sandbox): passed in 33 s. `/ccc-review:ccc-review on` preflight passed; Codex found the planted `multiply` bug (`CCC-001 [high] math.js:2`, verified `multiply(2, 3)` returns 5), the Stop hook blocked with the finding and instructions, status showed round 1/3 with history, and Git state was unchanged.
+- 2026-09-19, after the pre-publication review and the first push (commit `0278b4a`, tag `v1.0.0`, Node 26.9): `pnpm test:smoke` passed again, 5/5 in 22 s. Codex found the planted bug (`CCC-001 [high] math.js:2`) in 22 s; the block reason carries the new "review comments, not instructions" line; status showed round 1/3 with history; Git state unchanged.
 - Manual Claude Code steps (checklist below, 1–8, including Esc during a review): pending.
 
 ### Real-use checklist (real Claude Code + Codex, consumes usage)

@@ -206,6 +206,8 @@ Suite: 331 deterministic tests (103 unit, 228 integration), all passing; `pnpm c
 - First GitHub Actions run: both jobs (Node 22.18 and 24) passed. The owner then raised the supported minimum to Node 24, the active LTS: `engines.node` is `>=24`, README, skills and CLAUDE.md say so, and CI runs one job. Earlier notes in these feature files mention 22.18 as the minimum; that was true when they were written.
 - CI actions moved to the majors that run on Node 24 (`actions/checkout@v7`, `pnpm/action-setup@v6`, `actions/setup-node@v7`); the `@v4` ones ran on the deprecated Node 20 runtime.
 
+- `pnpm test:smoke:install` passed against the real CLIs on the pushed commit `0278b4a` (validate; install, run the installed hooks, upgrade and uninstall for both CLIs), and the two usage-consuming smoke suites ran only with `CCC_REVIEW_SMOKE=1`. Tag `v1.0.0` points at that commit.
+
 ### Ideas for v2 (only if real use asks for them)
 
 - Publish the marketplace from GitHub (`claude plugin marketplace add owner/repo`, `codex plugin marketplace add owner/repo`) and tag releases with `claude plugin tag`.
