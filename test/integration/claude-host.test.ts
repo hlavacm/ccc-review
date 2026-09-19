@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { writeFile } from "node:fs/promises";
+import { readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { readHistory } from "../../src/core/state.ts";
 import { captureBaseline } from "../../src/git.ts";
 import { configFromEnv, runHook } from "../../src/hosts/claude-code/hooks.ts";
 import { CodexReviewer } from "../../src/reviewers/codex.ts";
@@ -23,10 +24,18 @@ describe("Claude Code host", () => {
 	let codex: FakeCodex;
 	let host: ClaudeHostHarness;
 
-	async function setup(steps: FakeCodexStep[], timeoutMs = 10_000) {
+	async function setup(
+		steps: FakeCodexStep[],
+		timeoutMs = 10_000,
+		maxRounds?: number,
+	) {
 		await codex.script(...steps);
 		host = new ClaudeHostHarness(
-			{ stateDir, reviewer: new CodexReviewer({ bin: codex.bin, timeoutMs }) },
+			{
+				stateDir,
+				reviewer: new CodexReviewer({ bin: codex.bin, timeoutMs, env: {} }),
+				...(maxRounds === undefined ? {} : { maxRounds }),
+			},
 			repo.root,
 		);
 	}
@@ -45,6 +54,17 @@ describe("Claude Code host", () => {
 	});
 
 	const calls = async () => (await codex.calls()).length;
+	const history = async () =>
+		readHistory(join(stateDir, "history"), (await host.taskId()) ?? "");
+	const claims = async () => {
+		try {
+			return await readdir(
+				join(stateDir, "claims", (await host.taskId()) ?? ""),
+			);
+		} catch {
+			return undefined;
+		}
+	};
 
 	describe("inactive session", () => {
 		it("stop and prompt hooks do nothing and never call codex", async () => {
@@ -294,7 +314,8 @@ describe("Claude Code host", () => {
 				);
 			});
 
-		it("missing codex executable", async () => {
+		it("codex executable disappearing after activation", async () => {
+			await host.command("on");
 			host = new ClaudeHostHarness(
 				{
 					stateDir,
@@ -302,7 +323,6 @@ describe("Claude Code host", () => {
 				},
 				repo.root,
 			);
-			await host.command("on");
 			const out = await host.stop("done");
 			assert.match(out?.systemMessage ?? "", /not found/);
 			assert.equal((await host.state())?.lastResult, undefined);
@@ -411,6 +431,46 @@ describe("Claude Code host", () => {
 			assert.ok(configFromEnv({ CCCR_CODEX_TIMEOUT_MS: "5" }));
 		});
 
+		it("reads max rounds, model and reasoning effort", () => {
+			const c = configFromEnv({
+				CCCR_MAX_ROUNDS: "5",
+				CCCR_CODEX_MODEL: "gpt-x",
+				CCCR_CODEX_REASONING_EFFORT: "high",
+				CCCR_CODEX_TIMEOUT_MS: "120000",
+			});
+			assert.equal(c.maxRounds, 5);
+			assert.equal(
+				c.reviewer.describe?.(),
+				"codex (bin codex, timeout 2 min, model gpt-x, reasoning high)",
+			);
+			const d = configFromEnv({});
+			assert.equal(d.maxRounds, undefined);
+			assert.equal(
+				d.reviewer.describe?.(),
+				"codex (bin codex, timeout 20 min, model default, reasoning default)",
+			);
+		});
+
+		const invalid: [string, string, RegExp][] = [
+			["CCCR_MAX_ROUNDS", "0", /invalid CCCR_MAX_ROUNDS/],
+			["CCCR_MAX_ROUNDS", "two", /invalid CCCR_MAX_ROUNDS/],
+			["CCCR_MAX_ROUNDS", " ", /invalid CCCR_MAX_ROUNDS/],
+			[
+				"CCCR_CODEX_REASONING_EFFORT",
+				"extreme",
+				/invalid CCCR_CODEX_REASONING_EFFORT "extreme": expected one of minimal, low, medium, high, xhigh/,
+			],
+		];
+		for (const [name, value, error] of invalid)
+			it(`rejects ${name}=${JSON.stringify(value)} without approving`, async () => {
+				assert.throws(() => configFromEnv({ [name]: value }), error);
+				const out = await runHook("stop", "{}", () =>
+					configFromEnv({ [name]: value }),
+				);
+				assert.equal(out?.decision, undefined);
+				assert.match(out?.systemMessage ?? "", error);
+			});
+
 		for (const bad of ["0", "-1", "1.5", "abc", ""])
 			it(`rejects CCCR_CODEX_TIMEOUT_MS=${JSON.stringify(bad)}`, async () => {
 				assert.throws(
@@ -422,5 +482,218 @@ describe("Claude Code host", () => {
 				);
 				assert.match(out?.systemMessage ?? "", /invalid CCCR_CODEX_TIMEOUT_MS/);
 			});
+	});
+
+	describe("activation preflight", () => {
+		it("a missing codex binary refuses activation with an actionable message", async () => {
+			const h = new ClaudeHostHarness(
+				{
+					stateDir,
+					reviewer: new CodexReviewer({ bin: join(stateDir, "nope"), env: {} }),
+				},
+				repo.root,
+			);
+			const out = await h.command("on");
+			assert.equal(out?.decision, "block");
+			assert.match(
+				out?.reason ?? "",
+				/not enabled: codex executable not found: .*CCCR_CODEX_BIN/,
+			);
+			assert.equal(await h.taskId(), undefined);
+		});
+
+		it("with CODEX_API_KEY a missing binary still refuses activation", async () => {
+			const h = new ClaudeHostHarness(
+				{
+					stateDir,
+					reviewer: new CodexReviewer({
+						bin: join(stateDir, "nope"),
+						env: { CODEX_API_KEY: "sk-test" },
+					}),
+				},
+				repo.root,
+			);
+			assert.match(
+				(await h.command("on"))?.reason ?? "",
+				/not enabled: codex executable not found/,
+			);
+			assert.equal(await h.taskId(), undefined);
+		});
+
+		it("codex not logged in refuses activation", async () => {
+			await codex.login({ exit: 1, stdout: "Not logged in\n" });
+			const out = await host.command("on");
+			assert.match(
+				out?.reason ?? "",
+				/not enabled: Codex is not logged in — run `codex login`/,
+			);
+			assert.equal(await host.taskId(), undefined);
+			assert.equal(await calls(), 0);
+		});
+
+		it("logging out after activation fails the review fast, never approval", async () => {
+			await setup([{ output: approved() }]);
+			await host.command("on");
+			await codex.login({ exit: 1, stdout: "Not logged in\n" });
+			const out = await host.stop("done");
+			assert.match(out?.systemMessage ?? "", /NOT approved[\s\S]*codex login/);
+			assert.equal(await calls(), 0);
+			const state = await host.state();
+			assert.equal(state?.active, false);
+			assert.equal(state?.lastResult, undefined);
+		});
+	});
+
+	describe("dirty repository warning", () => {
+		it("a clean tree gets no warning", async () => {
+			assert.doesNotMatch((await host.command("on"))?.reason ?? "", /Warning/);
+		});
+
+		it("pre-existing changes are listed for the user, capped", async () => {
+			await repo.write("app.ts", "export const x = 9;\n");
+			for (let i = 0; i < 11; i++) await repo.write(`u${i}.txt`, "x\n");
+			const reason = (await host.command("on"))?.reason ?? "";
+			assert.match(reason, /enabled/);
+			assert.match(
+				reason,
+				/Warning: the working tree already has 12 uncommitted change\(s\)/,
+			);
+			assert.match(reason, / M app\.ts/);
+			assert.match(reason, /… and 2 more/);
+			assert.match(reason, /12 pre-existing dirty path\(s\)/);
+		});
+	});
+
+	describe("history and status", () => {
+		it("records every round and shows it in status", async () => {
+			await setup([
+				{
+					output: changesRequested(finding("CCC-001"), {
+						...finding("CCC-002"),
+						severity: "low",
+					}),
+				},
+				{ rawOutput: "nope" },
+			]);
+			await host.command("on");
+			await host.stop("r1");
+			await host.stop("r2", true);
+			const events = (await history()).map((e) => [
+				e.event,
+				e.round,
+				e.outcome,
+			]);
+			assert.deepEqual(events, [
+				["on", undefined, undefined],
+				["round", 1, "changes_requested"],
+				["round", 2, "reviewer_error"],
+			]);
+			const [, r1, r2] = await history();
+			assert.equal(r1?.result?.findings.length, 2);
+			assert.match(r2?.error ?? "", /invalid JSON/);
+			assert.equal(r2?.result, undefined);
+
+			const status = (await host.command("status"))?.reason ?? "";
+			assert.match(status, /status: inactive/);
+			assert.match(status, /round: 2\/3/);
+			assert.match(
+				status,
+				/reviewer: codex \(bin .*codex, timeout 10000 ms, model default, reasoning default\)/,
+			);
+			assert.match(status, /history:\n {2}\S+ \S+ on\n/);
+			assert.match(
+				status,
+				/round 1: CHANGES_REQUESTED — 2 finding\(s\): CCC-001, CCC-002/,
+			);
+			assert.match(
+				status,
+				/round 2: reviewer_error — codex returned invalid JSON: nope/,
+			);
+			assert.match(
+				status,
+				new RegExp(`state: .*tasks/${await host.taskId()}\\.json`),
+			);
+			assert.match(
+				status,
+				new RegExp(`log: .*history/${await host.taskId()}\\.jsonl`),
+			);
+		});
+
+		it("off is logged", async () => {
+			await host.command("on");
+			await host.command("off");
+			assert.deepEqual(
+				(await history()).map((e) => e.event),
+				["on", "off"],
+			);
+			assert.match((await host.command("status"))?.reason ?? "", / off\n/);
+		});
+
+		it("a corrupt history file is reported by status, not ignored", async () => {
+			await host.command("on");
+			await writeFile(
+				join(stateDir, "history", `${await host.taskId()}.jsonl`),
+				"garbage\n",
+			);
+			const out = await host.command("status");
+			assert.equal(out?.decision, "block");
+			assert.match(out?.reason ?? "", /CCC Review error: corrupt history file/);
+		});
+	});
+
+	describe("cleanup and abort", () => {
+		it("off drops the task's claims; later completions are ignored", async () => {
+			await setup([{ output: changesRequested() }]);
+			await host.command("on");
+			await host.stop("r1");
+			assert.equal((await claims())?.length, 1);
+			await host.command("off");
+			assert.equal(await claims(), undefined);
+			assert.equal(await host.stop("r1"), undefined);
+			assert.equal(await host.stop("r2"), undefined);
+			assert.equal(await calls(), 1);
+		});
+
+		it("a finished task drops its claims and a duplicate does not re-review", async () => {
+			await setup([{ output: approved() }, { output: approved() }]);
+			await host.command("on");
+			await host.stop("done");
+			assert.equal(await claims(), undefined);
+			assert.equal(await host.stop("done"), undefined);
+			assert.equal(await calls(), 1);
+		});
+
+		it("an active task keeps its claims", async () => {
+			await setup([{ output: changesRequested() }]);
+			await host.command("on");
+			await host.stop("r1");
+			assert.equal(await host.stop("r1"), undefined);
+			assert.equal(await calls(), 1);
+			assert.equal((await claims())?.length, 1);
+		});
+	});
+
+	describe("configured max rounds", () => {
+		it("CCCR_MAX_ROUNDS limits the loop", async () => {
+			await setup(
+				[{ output: changesRequested() }, { output: approved() }],
+				10_000,
+				1,
+			);
+			await host.command("on");
+			assert.match((await host.command("status"))?.reason ?? "", /round: 0\/1/);
+			const out = await host.stop("r1");
+			assert.equal(out?.decision, undefined);
+			assert.match(
+				out?.systemMessage ?? "",
+				/max 1 review rounds reached WITHOUT approval/,
+			);
+			assert.equal(await host.stop("r2", true), undefined);
+			assert.equal(await calls(), 1);
+			assert.match(
+				(await host.command("status"))?.reason ?? "",
+				/round 1: CHANGES_REQUESTED — 1 finding\(s\): CCC-001 \(max rounds reached\)/,
+			);
+		});
 	});
 });

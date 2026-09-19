@@ -4,7 +4,10 @@ import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import type { ReviewRequest } from "../../src/core/types.ts";
 import { captureBaseline } from "../../src/git.ts";
-import { CodexReviewer } from "../../src/reviewers/codex.ts";
+import {
+	CodexReviewer,
+	type CodexReviewerOptions,
+} from "../../src/reviewers/codex.ts";
 import { FakeCodex, type FakeCodexStep } from "../helpers/fake-codex.ts";
 import {
 	approved,
@@ -49,9 +52,15 @@ describe("CodexReviewer", () => {
 		codex = undefined;
 	});
 
-	async function review(step: FakeCodexStep, timeoutMs = 10_000) {
+	async function review(
+		step: FakeCodexStep,
+		timeoutMs = 10_000,
+		options: CodexReviewerOptions = {},
+	) {
 		codex = await FakeCodex.create(step);
-		return new CodexReviewer({ bin: codex.bin, timeoutMs }).review(request);
+		return new CodexReviewer({ bin: codex.bin, timeoutMs, ...options }).review(
+			request,
+		);
 	}
 
 	it("returns a valid approval", async () => {
@@ -232,6 +241,156 @@ describe("CodexReviewer", () => {
 				output: approved(),
 			});
 			assert.equal(result.verdict, "APPROVED");
+		});
+	});
+
+	describe("login preflight", () => {
+		// Regression: an unauthenticated `codex exec` does not fail, it retries
+		// the 401 ("Reconnecting... waiting for network") until the 20 min
+		// timeout, so the Stop hook hung. `codex login status` fails fast.
+		it("not logged in fails fast with a login hint and never runs exec", async () => {
+			codex = await FakeCodex.create({ output: approved() });
+			await codex.login({ exit: 1, stdout: "Not logged in\n" });
+			const started = Date.now();
+			await assert.rejects(
+				new CodexReviewer({ bin: codex.bin, timeoutMs: 60_000 }).review(
+					request,
+				),
+				/Codex is not logged in — run `codex login`/,
+			);
+			assert.ok(Date.now() - started < 10_000);
+			assert.equal((await codex.calls()).length, 0);
+			assert.equal(await codex.loginCalls(), 1);
+		});
+
+		it("runs before every review when logged in", async () => {
+			await review({ output: approved() });
+			assert.equal(await codex?.loginCalls(), 1);
+			assert.equal((await codex?.calls())?.length, 1);
+		});
+
+		it("is skipped when CODEX_API_KEY authenticates exec", async () => {
+			codex = await FakeCodex.create({ output: approved() });
+			await codex.login({ exit: 1, stdout: "Not logged in\n" });
+			const result = await new CodexReviewer({
+				bin: codex.bin,
+				env: { CODEX_API_KEY: "sk-test" },
+			}).review(request);
+			assert.equal(result.verdict, "APPROVED");
+			assert.equal(await codex.loginCalls(), 0);
+		});
+
+		// Regression: with CODEX_API_KEY the whole check was skipped, so a
+		// missing codex binary still let `on` enable review.
+		it("with CODEX_API_KEY a missing binary is still reported", async () => {
+			await assert.rejects(
+				new CodexReviewer({
+					bin: join(repo.root, "nope"),
+					env: { CODEX_API_KEY: "sk-test" },
+				}).check(repo.root),
+				/codex executable not found/,
+			);
+			codex = await FakeCodex.create();
+			await new CodexReviewer({
+				bin: codex.bin,
+				env: { CODEX_API_KEY: "sk-test" },
+			}).check(repo.root);
+			assert.equal(await codex.loginCalls(), 0);
+			assert.equal((await codex.calls()).length, 0);
+		});
+
+		it("a hanging login check is bounded by the timeout", async () => {
+			codex = await FakeCodex.create({ output: approved() });
+			await codex.login({ exit: 0, sleepMs: 30_000 });
+			await assert.rejects(
+				new CodexReviewer({ bin: codex.bin, timeoutMs: 500 }).review(request),
+				/timed out after 500 ms/,
+			);
+			assert.equal((await codex.calls()).length, 0);
+		});
+
+		it("check() reports a missing binary and a missing login", async () => {
+			await assert.rejects(
+				new CodexReviewer({ bin: join(repo.root, "nope") }).check(),
+				/codex executable not found: .*nope — install the Codex CLI or set CCCR_CODEX_BIN/,
+			);
+			codex = await FakeCodex.create();
+			await new CodexReviewer({ bin: codex.bin }).check();
+			await codex.login({ exit: 1, stdout: "Not logged in\n" });
+			await assert.rejects(
+				new CodexReviewer({ bin: codex.bin }).check(),
+				/not logged in/,
+			);
+		});
+	});
+
+	describe("actionable error messages", () => {
+		it("an auth failure during exec gets a login hint", async () => {
+			await assert.rejects(
+				review({
+					exit: 1,
+					stderr:
+						"ERROR codex_api: failed to connect: HTTP error: 401 Unauthorized\n",
+				}),
+				/exited with code 1: .*401 Unauthorized[\s\S]*run `codex login`/,
+			);
+		});
+
+		it("only the last stderr lines are kept", async () => {
+			const lines = Array.from({ length: 50 }, (_, i) => `line ${i}`);
+			await assert.rejects(
+				review({ exit: 2, stderr: `${lines.join("\n")}\n` }),
+				(error: Error) => {
+					assert.match(error.message, /line 49$/);
+					assert.doesNotMatch(error.message, /line 39\b/);
+					return true;
+				},
+			);
+		});
+
+		it("invalid JSON shows an excerpt of the output", async () => {
+			await assert.rejects(
+				review({ rawOutput: `Sure! Here is my review: ${"z".repeat(1000)}` }),
+				(error: Error) => {
+					assert.match(error.message, /invalid JSON: Sure! Here is my review/);
+					assert.ok(error.message.length < 400);
+					return true;
+				},
+			);
+		});
+
+		it("a timeout in whole minutes names the setting to raise", async () => {
+			const reviewer = new CodexReviewer({ timeoutMs: 20 * 60_000 });
+			assert.equal(
+				reviewer.describe(),
+				"codex (bin codex, timeout 20 min, model default, reasoning default)",
+			);
+			await assert.rejects(
+				review({ sleepMs: 30_000 }, 500),
+				/timed out after 500 ms — raise CCCR_CODEX_TIMEOUT_MS/,
+			);
+		});
+	});
+
+	describe("model options", () => {
+		it("passes model and reasoning effort only when configured", async () => {
+			await review({ output: approved() });
+			let [call] = (await codex?.calls()) ?? [];
+			assert.ok(!call?.argv.includes("-m"));
+			assert.ok(
+				!call?.argv.some((a) => a.startsWith("model_reasoning_effort")),
+			);
+			await codex?.dispose();
+
+			await review({ output: approved() }, 10_000, {
+				model: "gpt-test",
+				reasoningEffort: "high",
+			});
+			[call] = (await codex?.calls()) ?? [];
+			const argv = call?.argv ?? [];
+			assert.equal(argv[argv.indexOf("-m") + 1], "gpt-test");
+			assert.ok(argv.includes('model_reasoning_effort="high"'));
+			assert.equal(argv.at(-1), "-");
 		});
 	});
 });

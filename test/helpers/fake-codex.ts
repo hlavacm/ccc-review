@@ -1,9 +1,9 @@
 import { chmod, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { FakeCodexStep } from "../fixtures/fake-codex.ts";
+import type { FakeCodexLogin, FakeCodexStep } from "../fixtures/fake-codex.ts";
 import { makeTempDir, removeDir } from "./temp-dir.ts";
 
-export type { FakeCodexStep };
+export type { FakeCodexLogin, FakeCodexStep };
 
 export interface FakeCodexCall {
 	argv: string[];
@@ -42,6 +42,20 @@ export class FakeCodex {
 		await writeFile(join(this.dir, "steps.json"), JSON.stringify(steps));
 	}
 
+	/** How `codex login status` answers from now on. */
+	async login(login: FakeCodexLogin): Promise<void> {
+		await writeFile(join(this.dir, "login.json"), JSON.stringify(login));
+	}
+
+	async loginCalls(): Promise<number> {
+		try {
+			return Number(await readFile(join(this.dir, "login-calls"), "utf8"));
+		} catch {
+			return 0;
+		}
+	}
+
+	/** Recorded `codex exec` invocations. */
 	async calls(): Promise<FakeCodexCall[]> {
 		const files = (await readdir(this.dir))
 			.filter((f) => /^call-\d+\.json$/.test(f))

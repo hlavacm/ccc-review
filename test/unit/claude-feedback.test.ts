@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { RoundOutcome } from "../../src/core/review-loop.ts";
 import { createTaskState, type TaskState } from "../../src/core/state.ts";
 import {
+	findingLines,
 	stopOutput,
 	writerFeedback,
 } from "../../src/hosts/claude-code/hooks.ts";
@@ -85,5 +86,40 @@ describe("stopOutput", () => {
 			}),
 		);
 		assert.match(out?.systemMessage ?? "", /CCC-009 \[high\]: still broken/);
+	});
+});
+
+describe("findingLines", () => {
+	it("lists the most severe findings first, stable within a severity", () => {
+		const lines = findingLines([
+			{ id: "CCC-001", severity: "low", message: "a" },
+			{ id: "CCC-002", severity: "high", message: "b" },
+			{ id: "CCC-003", severity: "medium", message: "c" },
+			{ id: "CCC-004", severity: "high", message: "d" },
+		]);
+		assert.deepEqual(
+			lines.map((l) => l.slice(2, 9)),
+			["CCC-002", "CCC-004", "CCC-003", "CCC-001"],
+		);
+	});
+
+	it("indents continuation lines of multi-line messages", () => {
+		const [line] = findingLines([
+			{ id: "CCC-001", severity: "high", message: "first\nsecond\nthird" },
+		]);
+		assert.equal(line, "- CCC-001 [high]: first\n    second\n    third");
+	});
+
+	it("is used for both Claude feedback and user messages", () => {
+		const r = changesRequested(
+			{ id: "CCC-001", severity: "low", message: "minor" },
+			{ id: "CCC-002", severity: "high", message: "major" },
+		);
+		const feedback = writerFeedback(r, 1, 3);
+		assert.ok(feedback.indexOf("CCC-002") < feedback.indexOf("CCC-001"));
+		const msg =
+			stopOutput("max_rounds", state({ round: 3, lastResult: r }))
+				?.systemMessage ?? "";
+		assert.ok(msg.indexOf("CCC-002") < msg.indexOf("CCC-001"));
 	});
 });

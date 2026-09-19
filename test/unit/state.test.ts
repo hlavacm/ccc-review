@@ -3,8 +3,10 @@ import { chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import {
+	appendHistory,
 	createTaskState,
 	loadState,
+	readHistory,
 	StateError,
 	saveState,
 	type TaskState,
@@ -180,4 +182,81 @@ describe("state persistence", () => {
 			assert.equal(await readFile(file, "utf8"), "{broken");
 		});
 	});
+});
+
+describe("review history", () => {
+	let dir: string;
+	beforeEach(async () => {
+		dir = await makeTempDir();
+	});
+	afterEach(() => removeDir(dir));
+
+	it("appends entries in order with a timestamp and reads them back", async () => {
+		const result = changesRequested(finding("CCC-001"));
+		await appendHistory(join(dir, "nested"), "t1", { event: "on" });
+		await appendHistory(join(dir, "nested"), "t1", {
+			event: "round",
+			round: 1,
+			outcome: "changes_requested",
+			result,
+		});
+		await appendHistory(join(dir, "nested"), "t1", {
+			event: "round",
+			round: 2,
+			outcome: "reviewer_error",
+			error: "boom",
+		});
+		const history = await readHistory(join(dir, "nested"), "t1");
+		assert.deepEqual(
+			history.map(({ at: _, ...e }) => e),
+			[
+				{ event: "on" },
+				{ event: "round", round: 1, outcome: "changes_requested", result },
+				{ event: "round", round: 2, outcome: "reviewer_error", error: "boom" },
+			],
+		);
+		for (const e of history) assert.ok(!Number.isNaN(Date.parse(e.at)));
+		assert.equal(
+			(await readFile(join(dir, "nested", "t1.jsonl"), "utf8")).split("\n")
+				.length,
+			4,
+		);
+	});
+
+	it("returns an empty history for an unknown task", async () => {
+		assert.deepEqual(await readHistory(dir, "missing"), []);
+	});
+
+	it("rejects task ids that could escape the history dir", async () => {
+		await assert.rejects(
+			appendHistory(dir, "../x", { event: "on" }),
+			StateError,
+		);
+		await assert.rejects(readHistory(dir, "a/b"), StateError);
+	});
+
+	const corrupt: [string, string][] = [
+		["garbage line", '{"at":"x","event":"on"}\nnot json\n'],
+		["unknown event", '{"at":"x","event":"boom"}\n'],
+		["not an object", "[]\n"],
+		// Regression: accepted, then status crashed on `at.slice`.
+		["missing timestamp", '{"event":"on"}\n'],
+		["numeric timestamp", '{"at":1,"event":"on"}\n'],
+		["fractional round", '{"at":"x","event":"round","round":1.5}\n'],
+		["numeric outcome", '{"at":"x","event":"round","round":1,"outcome":2}\n'],
+		["numeric error", '{"at":"x","event":"round","round":1,"error":2}\n'],
+		[
+			"forged result",
+			'{"at":"x","event":"round","round":1,"result":{"verdict":"OK"}}\n',
+		],
+	];
+	for (const [name, content] of corrupt)
+		it(`corrupt history (${name}) is an error, not silently dropped`, async () => {
+			await writeFile(join(dir, "t1.jsonl"), content);
+			await assert.rejects(readHistory(dir, "t1"), (error: Error) => {
+				assert.ok(error instanceof StateError);
+				assert.match(error.message, /corrupt history file/);
+				return true;
+			});
+		});
 });

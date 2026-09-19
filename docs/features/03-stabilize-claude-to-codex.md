@@ -2,7 +2,7 @@
 
 ## Status
 
-TODO
+TODO — implemented and covered; waiting only for the real-use checklist (`pnpm test:smoke` + manual Claude steps) to be run outside the development sandbox.
 
 ## Objective
 
@@ -75,16 +75,16 @@ Fix observed failure modes.
 
 ## Acceptance criteria
 
-- [ ] Common Codex infrastructure failures produce actionable messages.
-- [ ] Duplicate Stop-hook calls do not duplicate logical reviews.
-- [ ] Review state/history can be inspected.
-- [ ] User can disable/abort review cleanly.
-- [ ] Dirty repo context is visible to reviewer/user.
-- [ ] Every practical bug fixed during stabilization has an automated regression test.
-- [ ] New failure handling has automated coverage.
-- [ ] README contains a working Claude→Codex example.
+- [x] Common Codex infrastructure failures produce actionable messages.
+- [x] Duplicate Stop-hook calls do not duplicate logical reviews.
+- [x] Review state/history can be inspected.
+- [x] User can disable/abort review cleanly.
+- [x] Dirty repo context is visible to reviewer/user.
+- [x] Every practical bug fixed during stabilization has an automated regression test.
+- [x] New failure handling has automated coverage.
+- [x] README contains a working Claude→Codex example.
 - [ ] A short optional real-use checklist has been completed on at least one real repository.
-- [ ] Full deterministic test suite still runs without credentials/network.
+- [x] Full deterministic test suite still runs without credentials/network.
 
 ## Completion report
 
@@ -96,3 +96,54 @@ Explicitly separate:
 - failure paths now covered,
 - commands run/results,
 - ideas deliberately deferred.
+
+## Implementation notes
+
+Codex CLI 0.155.1; `model_reasoning_effort` values and `CODEX_API_KEY` for `codex exec` verified on learn.chatgpt.com (config reference, non-interactive mode) 2026-09-19.
+
+### Issues observed in real use
+
+1. Unauthenticated `codex exec` never exits: it retries the 401 ("Reconnecting... waiting for network", watched > 4 min), so the Stop hook would hang for the whole 20 min timeout. `codex login status` exits 1 with `Not logged in` immediately.
+2. Failure messages carried up to 4 KB of raw stderr (retry/hook noise) and no hint.
+3. The Stop hook being killed (interrupt) left the detached Codex process group running.
+4. The prompt pointed Codex at `git diff` only, so changes the writer had committed were invisible (false approval risk).
+5. Unbounded prompt: all baseline dirty paths, 20×8000 chars of prompts, full report.
+6. `claims/<taskId>/` never cleaned up.
+7. No history, no config in status, no dirty warning for the user, no max-rounds/model/effort settings.
+
+### Changes
+
+- `CodexReviewer`: `check()` = `codex login status` preflight (only `codex --version` with `CODEX_API_KEY`), run before every review and by `/cccr:cccr on`; short actionable messages (missing binary, not logged in, timeout in minutes + setting, invalid JSON excerpt, last 10 stderr lines + login hint on auth errors); SIGTERM/SIGINT/SIGHUP kill the process group and fail the review (recorded `reviewer_error`, task stopped, claims dropped); `model` (`-m`) and `reasoningEffort` (`-c model_reasoning_effort=…`); `describe()`.
+- Prompt: `git diff <activation HEAD>` + `git log <HEAD>..HEAD` (status/`--cached`/log without commits); dirty list capped at 50 paths, task/report at the last 12 000 chars.
+- Core: optional `Reviewer.check()`/`describe()`; append-only history `history/<taskId>.jsonl` (`appendHistory`/`readHistory`, corrupt → `StateError`).
+- Host: `on` preflight + dirty warning + `CCCR_MAX_ROUNDS`; history for on/round/off; `off` and every terminal outcome drop claims (with a post-claim state re-check so a stale duplicate cannot start a round); `status` shows reviewer settings, round history and file paths; findings sorted by severity with indented multi-line messages; `CCCR_CODEX_MODEL`, `CCCR_CODEX_REASONING_EFFORT` validated.
+- README: example session, configuration via settings `env`, troubleshooting, real-use checklist; opt-in `pnpm test:smoke`.
+
+### Regression tests
+
+- #1 `codex-reviewer.test.ts` "not logged in fails fast …" (with the old code the review ran exec and approved), "logging out after activation …" (host), `on` refused when not logged in / binary missing.
+- #2 `codex-reviewer.test.ts` "actionable error messages".
+- #3 `claude-workflow.test.ts` "aborting the Stop hook kills the whole codex process group" (verified to fail with the signal handler disabled: grandchild survives).
+- #4/#5 `codex-prompt.test.ts` "buildReviewPrompt stabilization" (failed before the fix).
+- #6 `claude-host.test.ts` "cleanup and abort".
+
+### Fixed after Codex review of this feature (regression tests verified to fail first)
+
+- An aborted review left the task active, unrecorded and with its claim held (recoverable only by off → on). Abort is now a reviewer error: recorded, task stopped, claims dropped; `on` resumes. `claude-workflow.test.ts` "aborting the Stop hook …" asserts state, history, claims and recovery.
+- With `CODEX_API_KEY` the whole preflight was skipped, so `on` enabled review without a Codex binary. It now runs `codex --version`. `codex-reviewer.test.ts` / `claude-host.test.ts` "with CODEX_API_KEY a missing binary …".
+- `readHistory` accepted entries without `at` (status then crashed on `at.slice`) or with invalid `round`/`outcome`/`error`/`result`. Every field is validated now. `state.test.ts` corrupt-history cases.
+- The login tests depended on the developer's environment: a set `CODEX_API_KEY` switched the preflight off (4 failures). `test/setup.ts` removes it (except for `pnpm test:smoke`); verified with `CODEX_API_KEY=sk-test pnpm test`.
+- #7 `state.test.ts` "review history", `claude-host.test.ts` "history and status", "dirty repository warning", "configured max rounds", configuration cases.
+
+### Real-use checklist results
+
+- 2026-09-19 `pnpm test:smoke` (real Codex CLI 0.155.1, disposable repo, outside the development sandbox): passed in 33 s. `/cccr:cccr on` preflight passed; Codex found the planted `multiply` bug (`CCC-001 [high] math.js:2`, verified `multiply(2, 3)` returns 5), the Stop hook blocked with the finding and instructions, status showed round 1/3 with history, and Git state was unchanged.
+- Manual Claude Code steps (README "Real-use checklist" 1–8, including Esc during a review): pending.
+
+### Deliberately deferred
+
+- `doctor` command: the `on` preflight and actionable status already cover it.
+- Protecting `off` against a concurrently finishing Stop (would need locking; not observed).
+- Plugin `userConfig` instead of env variables.
+- Deterministic test of the post-claim re-check race (needs fault injection between two file reads).
+- SIGKILL of the hook cannot be intercepted; Codex then outlives it until its own exit.

@@ -1,5 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import {
+	appendFile,
+	mkdir,
+	readFile,
+	rename,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import {
 	type GitBaseline,
@@ -55,11 +62,11 @@ export function createTaskState(options: {
 	};
 }
 
-function stateFile(dir: string, taskId: string): string {
+function stateFile(dir: string, taskId: string, ext = ".json"): string {
 	// taskId becomes a file name; refuse anything that could escape `dir`.
 	if (!/^[A-Za-z0-9_-]+$/.test(taskId))
 		throw new StateError(`invalid task id ${JSON.stringify(taskId)}`);
-	return join(dir, `${taskId}.json`);
+	return join(dir, `${taskId}${ext}`);
 }
 
 /** Atomic write: a crash never leaves a half-written state file. */
@@ -159,4 +166,90 @@ function isBaseline(value: unknown): value is GitBaseline {
 				(e.origPath === undefined || typeof e.origPath === "string"),
 		)
 	);
+}
+
+/** One line of a task's review history log. */
+export interface HistoryEntry {
+	/** ISO timestamp. */
+	at: string;
+	event: "on" | "round" | "off";
+	round?: number;
+	/** Round outcome, e.g. "approved" or "reviewer_error". */
+	outcome?: string;
+	result?: ReviewResult;
+	error?: string;
+}
+
+const HISTORY_EVENTS: readonly string[] = ["on", "round", "off"];
+
+/** Appends one line to `<dir>/<taskId>.jsonl`; the log is only ever appended. */
+export async function appendHistory(
+	dir: string,
+	taskId: string,
+	entry: Omit<HistoryEntry, "at">,
+): Promise<void> {
+	const file = stateFile(dir, taskId, ".jsonl");
+	await mkdir(dir, { recursive: true });
+	const line = JSON.stringify({ at: new Date().toISOString(), ...entry });
+	await appendFile(file, `${line}\n`);
+}
+
+/** Returns [] when there is no history; throws StateError when it is corrupt. */
+export async function readHistory(
+	dir: string,
+	taskId: string,
+): Promise<HistoryEntry[]> {
+	const file = stateFile(dir, taskId, ".jsonl");
+	let raw: string;
+	try {
+		raw = await readFile(file, "utf8");
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+		throw error;
+	}
+	return raw
+		.split("\n")
+		.filter((line) => line !== "")
+		.map((line, i) => {
+			let entry: unknown;
+			try {
+				entry = JSON.parse(line);
+			} catch {
+				throw new StateError(
+					`corrupt history file ${file}: line ${i + 1}: invalid JSON`,
+				);
+			}
+			try {
+				return parseHistoryEntry(entry);
+			} catch (error) {
+				throw new StateError(
+					`corrupt history file ${file}: line ${i + 1}: ${(error as Error).message}`,
+				);
+			}
+		});
+}
+
+function parseHistoryEntry(data: unknown): HistoryEntry {
+	if (typeof data !== "object" || data === null || Array.isArray(data))
+		throw new Error("not an object");
+	const e = data as Record<string, unknown>;
+	if (typeof e.at !== "string") throw new Error("invalid at");
+	if (!HISTORY_EVENTS.includes(e.event as string))
+		throw new Error("invalid event");
+	const entry: HistoryEntry = {
+		at: e.at,
+		event: e.event as HistoryEntry["event"],
+	};
+	if (e.round !== undefined) {
+		if (!Number.isInteger(e.round) || (e.round as number) < 0)
+			throw new Error("invalid round");
+		entry.round = e.round as number;
+	}
+	for (const key of ["outcome", "error"] as const) {
+		if (e[key] === undefined) continue;
+		if (typeof e[key] !== "string") throw new Error(`invalid ${key}`);
+		entry[key] = e[key];
+	}
+	if (e.result !== undefined) entry.result = parseReviewResult(e.result);
+	return entry;
 }

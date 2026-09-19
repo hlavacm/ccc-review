@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { loadState } from "../../src/core/state.ts";
+import { loadState, readHistory } from "../../src/core/state.ts";
 import { DEFAULT_CODEX_TIMEOUT_MS } from "../../src/reviewers/codex.ts";
 import { FakeCodex } from "../helpers/fake-codex.ts";
 import {
@@ -15,6 +15,26 @@ import { makeTempDir, removeDir } from "../helpers/temp-dir.ts";
 import { TemporaryGitRepository } from "../helpers/temp-git-repo.ts";
 
 const pluginRoot = join(import.meta.dirname, "../..");
+
+async function waitFor<T>(probe: () => Promise<T | undefined>): Promise<T> {
+	for (let i = 0; i < 200; i++) {
+		const value = await probe();
+		if (value !== undefined) return value;
+		await new Promise((r) => setTimeout(r, 25));
+	}
+	assert.fail("condition not reached");
+}
+
+async function assertGone(pid: number): Promise<void> {
+	await waitFor(async () => {
+		try {
+			process.kill(pid, 0);
+			return undefined;
+		} catch {
+			return true;
+		}
+	});
+}
 
 interface HookEntry {
 	matcher?: string;
@@ -253,6 +273,7 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 			CCCR_STATE_DIR: stateDir,
 			CCCR_CODEX_BIN: join(stateDir, "missing-codex"),
 		};
+		// Enabled while codex was available; it is gone by the time Claude stops.
 		runPluginHook(
 			"UserPromptExpansion",
 			{
@@ -260,7 +281,7 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 				command_name: "cccr:cccr",
 				command_args: "on",
 			},
-			e,
+			env,
 		);
 		const started = Date.now();
 		const out = runPluginHook(
@@ -275,6 +296,94 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 		assert.ok(Date.now() - started < 20_000);
 		assert.equal(out?.decision, undefined);
 		assert.match(String(out?.systemMessage), /NOT approved[\s\S]*not found/);
+	});
+
+	// Regression: codex runs in its own process group, so killing the Stop hook
+	// (user interrupt, Claude Code giving up) left codex and its children running.
+	it("aborting the Stop hook kills the whole codex process group", async () => {
+		await codex.script({ sleepMs: 30_000, childSleepMs: 30_000 });
+		runPluginHook(
+			"UserPromptExpansion",
+			{
+				...base("UserPromptExpansion"),
+				command_name: "cccr:cccr",
+				command_args: "on",
+			},
+			env,
+		);
+		const hook = spawn(
+			process.execPath,
+			[join(pluginRoot, "src/hosts/claude-code/cli.ts"), "stop"],
+			{ env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "pipe"] },
+		);
+		hook.stdin.end(
+			JSON.stringify({
+				...base("Stop"),
+				stop_hook_active: false,
+				last_assistant_message: "done",
+			}),
+		);
+		// Wait until codex and its grandchild are running.
+		const childPid = await waitFor(async () => {
+			try {
+				return await codex.childPid();
+			} catch {
+				return undefined;
+			}
+		});
+		const codexPid = await waitFor(async () =>
+			(await codex.calls()).length > 0 ? true : undefined,
+		);
+		assert.ok(codexPid);
+		const exited = new Promise<void>((r) => hook.on("exit", () => r()));
+		hook.kill("SIGTERM");
+		await exited;
+		await assertGone(childPid);
+		assert.equal(
+			(await codex.calls()).length,
+			1,
+			"codex must not be started again",
+		);
+		// Regression: the aborted round left the task active with its claim
+		// held and nothing in the history, so it could only be recovered by
+		// off → on. It is now a recorded reviewer error: stopped, NOT approved.
+		const tasks = join(stateDir, "tasks");
+		const taskId = (
+			JSON.parse(
+				readFileSync(join(stateDir, "sessions", `${session}.json`), "utf8"),
+			) as { taskId: string }
+		).taskId;
+		const state = await loadState(tasks, taskId);
+		assert.equal(state?.active, false);
+		assert.equal(state?.lastResult, undefined);
+		assert.match(state?.lastError ?? "", /aborted \(SIGTERM\)/);
+		const history = await readHistory(join(stateDir, "history"), taskId);
+		assert.equal(history.at(-1)?.outcome, "reviewer_error");
+		assert.match(history.at(-1)?.error ?? "", /aborted/);
+		assert.equal(existsSync(join(stateDir, "claims", taskId)), false);
+
+		// Recovery: a plain `on` starts a fresh task that reviews the same completion.
+		await codex.script({ output: approved() });
+		const on = runPluginHook(
+			"UserPromptExpansion",
+			{
+				...base("UserPromptExpansion"),
+				command_name: "cccr:cccr",
+				command_args: "on",
+			},
+			env,
+		);
+		assert.match(String(on?.reason), /enabled/);
+		const again = runPluginHook(
+			"Stop",
+			{
+				...base("Stop"),
+				stop_hook_active: false,
+				last_assistant_message: "done",
+			},
+			env,
+		);
+		assert.match(String(again?.systemMessage), /APPROVED/);
 	});
 
 	it("garbage stdin and bad config never block or crash the hook", () => {

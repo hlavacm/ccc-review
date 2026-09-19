@@ -1,23 +1,31 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { type RoundOutcome, runReviewRound } from "../../core/review-loop.ts";
 import {
+	appendHistory,
 	createTaskState,
+	type HistoryEntry,
 	loadState,
+	readHistory,
 	saveState,
 	type TaskState,
 } from "../../core/state.ts";
 import {
+	type Finding,
 	formatFinding,
+	type GitStatusEntry,
 	type Reviewer,
 	type ReviewResult,
+	SEVERITIES,
 } from "../../core/types.ts";
 import { captureBaseline } from "../../git.ts";
 import {
 	CodexReviewer,
 	DEFAULT_CODEX_TIMEOUT_MS,
+	REASONING_EFFORTS,
+	type ReasoningEffort,
 } from "../../reviewers/codex.ts";
 
 /** Claude Code hook stdout JSON. `undefined` = print nothing (no effect). */
@@ -30,6 +38,8 @@ export interface HookOutput {
 export interface HostConfig {
 	stateDir: string;
 	reviewer: Reviewer;
+	/** Review rounds per task; core default (3) when absent. */
+	maxRounds?: number;
 }
 
 /** Hook payload fields we rely on (Claude Code sends more). */
@@ -53,25 +63,51 @@ interface Session {
 const MAX_PROMPTS = 20;
 const MAX_PROMPT_CHARS = 8000;
 
-export function configFromEnv(env: NodeJS.ProcessEnv): HostConfig {
-	const timeout = env.CCCR_CODEX_TIMEOUT_MS;
-	const timeoutMs =
-		timeout === undefined ? DEFAULT_CODEX_TIMEOUT_MS : Number(timeout);
-	if (!Number.isInteger(timeoutMs) || timeoutMs <= 0)
+function positiveInt(env: NodeJS.ProcessEnv, name: string): number | undefined {
+	const raw = env[name];
+	if (raw === undefined) return undefined;
+	const value = Number(raw);
+	if (raw.trim() === "" || !Number.isInteger(value) || value <= 0)
 		throw new Error(
-			`invalid CCCR_CODEX_TIMEOUT_MS ${JSON.stringify(timeout)}: expected a positive integer`,
+			`invalid ${name} ${JSON.stringify(raw)}: expected a positive integer`,
 		);
-	return {
+	return value;
+}
+
+export function configFromEnv(env: NodeJS.ProcessEnv): HostConfig {
+	const effort = env.CCCR_CODEX_REASONING_EFFORT || undefined;
+	if (
+		effort !== undefined &&
+		!(REASONING_EFFORTS as readonly string[]).includes(effort)
+	)
+		throw new Error(
+			`invalid CCCR_CODEX_REASONING_EFFORT ${JSON.stringify(effort)}: expected one of ${REASONING_EFFORTS.join(", ")}`,
+		);
+	const config: HostConfig = {
 		stateDir:
 			env.CCCR_STATE_DIR || env.CLAUDE_PLUGIN_DATA || join(homedir(), ".cccr"),
 		reviewer: new CodexReviewer({
 			bin: env.CCCR_CODEX_BIN || "codex",
-			timeoutMs,
+			timeoutMs:
+				positiveInt(env, "CCCR_CODEX_TIMEOUT_MS") ?? DEFAULT_CODEX_TIMEOUT_MS,
+			...(env.CCCR_CODEX_MODEL ? { model: env.CCCR_CODEX_MODEL } : {}),
+			...(effort ? { reasoningEffort: effort as ReasoningEffort } : {}),
+			env,
 		}),
 	};
+	const maxRounds = positiveInt(env, "CCCR_MAX_ROUNDS");
+	if (maxRounds !== undefined) config.maxRounds = maxRounds;
+	return config;
 }
 
 const tasksDir = (c: HostConfig) => join(c.stateDir, "tasks");
+const historyDir = (c: HostConfig) => join(c.stateDir, "history");
+const claimsDir = (c: HostConfig, taskId: string) =>
+	join(c.stateDir, "claims", taskId);
+
+/** Claims only guard an active task; drop them once it has ended. */
+const dropClaims = (c: HostConfig, taskId: string) =>
+	rm(claimsDir(c, taskId), { recursive: true, force: true });
 
 function sessionFile(c: HostConfig, sessionId: unknown): string {
 	if (typeof sessionId !== "string" || !/^[A-Za-z0-9_-]+$/.test(sessionId))
@@ -138,36 +174,92 @@ export async function handleCommand(
 					`not enabled: ${input.cwd} is not a usable Git repository (${(error as Error).message}).`,
 				);
 			}
+			try {
+				await c.reviewer.check?.(baseline.root);
+			} catch (error) {
+				return reply(`not enabled: ${(error as Error).message}`);
+			}
 			const task = createTaskState({
 				writer: "claude",
 				reviewer: "codex",
 				baseline,
+				...(c.maxRounds === undefined ? {} : { maxRounds: c.maxRounds }),
 			});
 			await saveState(tasksDir(c), task);
+			await appendHistory(historyDir(c), task.taskId, { event: "on" });
 			const taskText = args.slice(action.length).trim();
 			await saveSession(c, input.session_id, {
 				taskId: task.taskId,
 				prompts: taskText ? [taskText] : [],
 			});
 			return reply(
-				`enabled. Codex will review when Claude finishes.\n${describe(task)}`,
+				[
+					"enabled. Codex will review when Claude finishes.",
+					...dirtyWarning(baseline.status),
+					describe(task),
+				].join("\n"),
 			);
 		}
 		case "off":
 			if (!state?.active) return reply("already off.");
 			await saveState(tasksDir(c), { ...state, active: false });
+			await appendHistory(historyDir(c), state.taskId, {
+				event: "off",
+				round: state.round,
+			});
+			await dropClaims(c, state.taskId);
 			return reply(
 				`disabled (task ${state.taskId}, ${state.round} round(s) run).`,
 			);
 		case "status":
 			return reply(
-				state ? describe(state) : "off (never enabled in this session).",
+				state
+					? await statusText(c, state)
+					: "off (never enabled in this session).",
 			);
 		default:
 			return reply(
 				`unknown action ${JSON.stringify(action)}. Use: on [task description] | off | status`,
 			);
 	}
+}
+
+const statusLine = (e: GitStatusEntry) =>
+	`  ${e.code} ${e.origPath === undefined ? "" : `${e.origPath} -> `}${e.path}`;
+
+const MAX_LISTED_PATHS = 10;
+
+function dirtyWarning(status: GitStatusEntry[]): string[] {
+	if (status.length === 0) return [];
+	const more = status.length - MAX_LISTED_PATHS;
+	return [
+		`Warning: the working tree already has ${status.length} uncommitted change(s). Codex is told they may not be Claude's, but review is clearer from a clean tree:`,
+		...status.slice(0, MAX_LISTED_PATHS).map(statusLine),
+		...(more > 0 ? [`  … and ${more} more`] : []),
+	];
+}
+
+async function statusText(c: HostConfig, s: TaskState): Promise<string> {
+	const history = await readHistory(historyDir(c), s.taskId);
+	return [
+		describe(s),
+		...(c.reviewer.describe ? [`reviewer: ${c.reviewer.describe()}`] : []),
+		"history:",
+		...(history.length > 0 ? history.map(historyLine) : ["  (none)"]),
+		`state: ${join(tasksDir(c), `${s.taskId}.json`)}`,
+		`log: ${join(historyDir(c), `${s.taskId}.jsonl`)}`,
+	].join("\n");
+}
+
+function historyLine(e: HistoryEntry): string {
+	const at = e.at.slice(0, 19).replace("T", " ");
+	if (e.event !== "round") return `  ${at} ${e.event}`;
+	const r = e.result;
+	const what = r
+		? `${r.verdict}${r.findings.length > 0 ? ` — ${r.findings.length} finding(s): ${r.findings.map((f) => f.id).join(", ")}` : ""}`
+		: `${e.outcome ?? "?"}${e.error ? ` — ${e.error.split("\n")[0]}` : ""}`;
+	const stop = e.outcome === "max_rounds" ? " (max rounds reached)" : "";
+	return `  ${at} round ${e.round}: ${what}${stop}`;
 }
 
 function describe(s: TaskState): string {
@@ -220,7 +312,7 @@ export async function handleStop(
 	// Claude Code sends no event id; the same final message is the same completion.
 	// Exclusive create claims the event atomically, so duplicate or concurrent
 	// deliveries of it never start a second round.
-	const claims = join(c.stateDir, "claims", state.taskId);
+	const claims = claimsDir(c, state.taskId);
 	await mkdir(claims, { recursive: true });
 	const key = createHash("sha256").update(report).digest("hex");
 	try {
@@ -229,6 +321,10 @@ export async function handleStop(
 		if ((error as NodeJS.ErrnoException).code === "EEXIST") return undefined;
 		throw error;
 	}
+	// Claims are dropped when a task ends, so a duplicate that read the state
+	// before that could claim again: only review if nothing moved meanwhile.
+	const fresh = await loadState(tasksDir(c), state.taskId);
+	if (!fresh?.active || fresh.round !== state.round) return undefined;
 
 	const context: { task?: string; report?: string } = {};
 	if (session.prompts.length > 0) context.task = session.prompts.join("\n\n");
@@ -239,6 +335,16 @@ export async function handleStop(
 		context,
 	);
 	await saveState(tasksDir(c), next);
+	const entry: Omit<HistoryEntry, "at"> = {
+		event: "round",
+		round: next.round,
+		outcome,
+	};
+	if (next.lastError !== undefined && outcome === "reviewer_error")
+		entry.error = next.lastError;
+	else if (next.lastResult) entry.result = next.lastResult;
+	await appendHistory(historyDir(c), next.taskId, entry);
+	if (!next.active) await dropClaims(c, next.taskId);
 	return stopOutput(outcome, next);
 }
 
@@ -276,11 +382,18 @@ export function stopOutput(
 	}
 }
 
+/** Most severe first; continuation lines of a multi-line message indented. */
+export function findingLines(findings: Finding[]): string[] {
+	return [...findings]
+		.sort(
+			(a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity),
+		)
+		.map((f) => `- ${formatFinding(f).replace(/\n/g, "\n    ")}`);
+}
+
 function resultText(r: ReviewResult | undefined): string {
 	if (!r) return "";
-	return [r.summary, ...r.findings.map((f) => `- ${formatFinding(f)}`)].join(
-		"\n",
-	);
+	return [r.summary, ...findingLines(r.findings)].join("\n");
 }
 
 export function writerFeedback(
@@ -294,7 +407,7 @@ export function writerFeedback(
 		`Summary: ${r.summary}`,
 		"",
 		"Findings:",
-		...r.findings.map((f) => `- ${formatFinding(f)}`),
+		...findingLines(r.findings),
 		"",
 		"Instructions:",
 		"1. Evaluate every finding independently; the reviewer can be wrong.",

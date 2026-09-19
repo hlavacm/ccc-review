@@ -75,10 +75,14 @@ or install it through the bundled local marketplace:
 Plugin commands are namespaced by Claude Code, so the command is `/cccr:cccr`:
 
 ```text
-/cccr:cccr on [task description]   # arm review for this session, record Git baseline
-/cccr:cccr status                  # active?, round n/3, last verdict/error, baseline
-/cccr:cccr off                     # disarm
+/cccr:cccr on [task description]   # check Codex, record Git baseline, arm review
+/cccr:cccr status                  # state, round n/3, reviewer settings, round history, file paths
+/cccr:cccr off                     # disarm (also aborts further rounds of this task)
 ```
+
+`on` refuses to arm review when Codex is missing or not logged in, and warns
+when the working tree already has uncommitted changes (Codex is told they may
+not be Claude's).
 
 Then work with Claude normally. Every time Claude finishes a turn, the Stop hook
 runs one Codex review round:
@@ -93,6 +97,41 @@ runs one Codex review round:
 
 Sessions where review was not turned on are not affected.
 
+### Example
+
+```text
+> /cccr:cccr on Add multiply(a, b) to math.js with a test
+CCC Review: enabled. Codex will review when Claude finishes.
+status: active
+task: 3f0c…
+round: 0/3
+baseline: /work/app @ main 1a2b3c4d5e6f, 0 pre-existing dirty path(s)
+
+> Implement it.
+… Claude edits math.js and finishes …
+Stop hook: CCC Review round 1/3: Codex requested changes.
+Findings:
+- CCC-001 [high] math.js:2: multiply returns a + b instead of a * b
+Instructions: … evaluate, fix or reject with reasoning, verify, report with IDs …
+… Claude fixes it: "CCC-001: fixed — … Verification: node --test" …
+CCC Review: Codex APPROVED (round 2/3). multiply is correct and tested.
+
+> /cccr:cccr status
+CCC Review: status: inactive
+…
+history:
+  2026-09-19 10:00:00 on
+  2026-09-19 10:03:12 round 1: CHANGES_REQUESTED — 1 finding(s): CCC-001
+  2026-09-19 10:06:40 round 2: APPROVED
+state: ~/.claude/plugins/data/cccr…/tasks/3f0c….json
+log: ~/.claude/plugins/data/cccr…/history/3f0c….jsonl
+```
+
+To abort a review that is running, interrupt Claude (Esc): when the hook
+process is terminated (SIGTERM/SIGINT/SIGHUP), CCC Review kills the whole Codex
+process group, records the round as `reviewer_error` ("codex review aborted",
+NOT approved) and stops the task. `/cccr:cccr on` starts a fresh one.
+
 ### How it works
 
 | Piece | Claude Code extension point |
@@ -101,25 +140,55 @@ Sessions where review was not turned on are not affected.
 | Task context | `UserPromptSubmit` hook records user prompts while review is active (plus text after `on`) |
 | Review trigger | `Stop` hook (`timeout: 1800` s); `{"decision":"block","reason":…}` returns findings to Claude; `last_assistant_message` is the writer's report |
 
-Codex is invoked as executable + argv, prompt on stdin:
+Codex is invoked as executable + argv, prompt on stdin, after a
+`codex login status` check (with `CODEX_API_KEY`, which authenticates
+`codex exec` but not `login status`, only `codex --version` is checked):
 
 ```text
-codex exec --sandbox read-only -c approval_policy="never" --cd <repo root> --ephemeral \
-  --color never --output-schema <strict schema> --output-last-message <file> -
+codex exec --sandbox read-only -c approval_policy="never" [-c model_reasoning_effort="…"] [-m <model>] \
+  --cd <repo root> --ephemeral --color never --output-schema <strict schema> --output-last-message <file> -
 ```
 
-Codex runs in its own process group; at the timeout the whole group is killed and the review fails. The result file is parsed and strictly validated; an empty/invalid result is an error.
+Codex runs in its own process group; at the timeout, or when the hook process
+receives SIGTERM/SIGINT/SIGHUP, the whole group is killed and the review fails.
+The result file is parsed and strictly validated; an empty/invalid result is an
+error. The prompt points Codex at `git diff <activation HEAD>` and
+`git log <activation HEAD>..HEAD`, so changes Claude committed are reviewed
+too; task text and report are capped at the last 12 000 characters, the
+pre-existing dirty list at 50 paths.
 
-Configuration (environment of the Claude Code process):
+Configuration (environment of the Claude Code process, e.g. the `env` block of
+`~/.claude/settings.json` or `.claude/settings.local.json`):
 
 | Variable | Default |
 | --- | --- |
 | `CCCR_CODEX_BIN` | `codex` |
 | `CCCR_CODEX_TIMEOUT_MS` | `1200000` (20 min) |
+| `CCCR_MAX_ROUNDS` | `3` (read at `on`) |
+| `CCCR_CODEX_MODEL` | Codex's configured model (`-m`) |
+| `CCCR_CODEX_REASONING_EFFORT` | Codex's configured effort; `minimal`, `low`, `medium`, `high`, `xhigh` |
 | `CCCR_STATE_DIR` | `${CLAUDE_PLUGIN_DATA}`, else `~/.cccr` |
 
-State: `tasks/<taskId>.json` (round, verdict, baseline), `sessions/<sessionId>.json`
-(task id, recorded prompts), `claims/<taskId>/<hash>` (completion events already reviewed).
+```json
+{ "env": { "CCCR_MAX_ROUNDS": "2", "CCCR_CODEX_REASONING_EFFORT": "high" } }
+```
+
+An invalid value is reported as a `CCC Review error` message and never approves.
+
+State: `tasks/<taskId>.json` (round, verdict, baseline), `history/<taskId>.jsonl`
+(one line per `on`, round result or error, `off`; append-only),
+`sessions/<sessionId>.json` (task id, recorded prompts), `claims/<taskId>/<hash>`
+(completion events already reviewed; removed when the task ends or is turned off).
+
+### Troubleshooting
+
+| Message | Fix |
+| --- | --- |
+| `codex executable not found: codex — install the Codex CLI or set CCCR_CODEX_BIN` | install Codex or point `CCCR_CODEX_BIN` at it |
+| `Codex is not logged in — run \`codex login\`` | `codex login` (or set `CODEX_API_KEY`) |
+| `codex timed out after 20 min — raise CCCR_CODEX_TIMEOUT_MS …` | raise the timeout (keep it under the Stop hook's 30 min) |
+| `codex returned invalid JSON: …` / `an invalid review: …` | usually transient; the excerpt shows what Codex produced |
+| `codex exited with code N: <last stderr lines>` | read the stderr lines; auth errors add the login hint |
 
 ### Known limitations
 
@@ -132,7 +201,11 @@ State: `tasks/<taskId>.json` (round, verdict, baseline), `sessions/<sessionId>.j
 - The exact `command_name` Claude Code reports for a plugin skill is not
   documented; both `cccr` and `cccr:cccr` are accepted.
 
-### Manual smoke test (real Claude + Codex, consumes usage)
+### Real-use checklist (real Claude + Codex, consumes usage)
+
+`pnpm test:smoke` runs the Codex half automatically: a real `codex exec`
+reviews a planted bug in a disposable repository through the host code
+(needs `codex login`, not part of `pnpm test`). The Claude half is manual:
 
 Never run this in a repository you care about.
 
@@ -146,7 +219,10 @@ claude --plugin-dir /path/to/cccr
 2. Ask Claude to do the task. When it finishes, Codex reviews (may take minutes).
 3. Expect either an approval message, or Claude continuing with `CCC-00x` findings and a re-review.
 4. `/cccr:cccr status` shows the round and last verdict; `git status` shows only Claude's edits (no commits/stashes by CCC Review).
-5. Failure path: `CCCR_CODEX_BIN=/nonexistent claude --plugin-dir /path/to/cccr`, turn on, finish a task → "Codex review FAILED — the change is NOT approved".
+5. Failure path: `CCCR_CODEX_BIN=/nonexistent claude --plugin-dir /path/to/cccr`, turn on → "not enabled: codex executable not found".
+6. Commit during the task (ask Claude to commit) → Codex still reviews the committed change.
+7. Press Esc while Codex is reviewing → no `codex` process left (`pgrep -fl "codex exec"`); `status` shows the round as aborted, `on` starts again.
+8. `/cccr:cccr off` mid-task → the next completion is not reviewed; `status` history ends with `off`.
 
 ## Development
 
@@ -158,6 +234,7 @@ pnpm test                 # all deterministic tests (no credentials, no network)
 pnpm test:unit
 pnpm test:integration # real temporary Git repositories
 pnpm test:coverage
+pnpm test:smoke       # opt-in, real Codex (credentials, usage)
 pnpm typecheck
 pnpm lint             # Biome lint + format check; `pnpm format` to fix
 pnpm build            # emits dist/

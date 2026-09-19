@@ -78,6 +78,67 @@ describe("buildReviewPrompt", () => {
 	});
 });
 
+describe("buildReviewPrompt stabilization", () => {
+	// Regression: the prompt only pointed at `git diff` (working tree), so
+	// changes the writer had already committed were invisible to Codex.
+	it("reviews everything since the activation commit, including new commits", () => {
+		const p = buildReviewPrompt(request());
+		assert.match(p, /`git diff abc123`/);
+		assert.match(p, /`git log --oneline abc123\.\.HEAD`/);
+		assert.match(p, /untracked/);
+	});
+
+	it("falls back to status and log when there were no commits", () => {
+		const p = buildReviewPrompt(
+			request({
+				baseline: { root: "/r", headSha: null, branch: null, status: [] },
+			}),
+		);
+		assert.doesNotMatch(p, /git diff null/);
+		assert.match(p, /no commits at activation/);
+		assert.match(p, /`git log --oneline`/);
+	});
+
+	it("caps the pre-existing dirty path list", () => {
+		const status = Array.from({ length: 120 }, (_, i) => ({
+			code: "??",
+			path: `f${i}.txt`,
+		}));
+		const p = buildReviewPrompt(
+			request({
+				baseline: { root: "/r", headSha: "abc", branch: "m", status },
+			}),
+		);
+		assert.match(p, /f49\.txt/);
+		assert.doesNotMatch(p, /f50\.txt/);
+		assert.match(p, /… and 70 more/);
+	});
+
+	it("keeps the most recent part of an oversized task and report", () => {
+		const p = buildReviewPrompt(
+			request({
+				context: {
+					task: `OLD${"t".repeat(20_000)}NEWTASK`,
+					report: `START${"r".repeat(20_000)}ENDREPORT`,
+				},
+			}),
+		);
+		assert.match(p, /NEWTASK/);
+		assert.match(p, /ENDREPORT/);
+		assert.doesNotMatch(p, /OLD/);
+		assert.doesNotMatch(p, /START/);
+		assert.match(p, /\[… \d+ earlier characters omitted\]/);
+		assert.ok(p.length < 30_000, `prompt is ${p.length} chars`);
+	});
+
+	it("leaves short context untouched", () => {
+		const p = buildReviewPrompt(
+			request({ context: { task: "T", report: "R" } }),
+		);
+		assert.doesNotMatch(p, /omitted/);
+	});
+});
+
 describe("REVIEW_SCHEMA", () => {
 	// Codex --output-schema uses strict structured outputs.
 	function checkStrict(node: unknown, path: string): void {

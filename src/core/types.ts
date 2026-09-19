@@ -65,6 +65,10 @@ export interface ReviewContext {
 export interface Reviewer {
 	/** Must reject on any infrastructure failure; never fabricate a result. */
 	review(request: ReviewRequest): Promise<ReviewResult>;
+	/** Optional fast readiness check (installed, authenticated) before activation. */
+	check?(cwd: string): Promise<void>;
+	/** Optional one-line description of the reviewer and its settings. */
+	describe?(): string;
 }
 
 export class InvalidReviewResultError extends Error {
