@@ -6,4 +6,4 @@ description: Turn CCC Review (Claude Code reviews Codex's changes) on, off, or s
 The CCC Review hook did not handle this command, so nothing was changed and
 Claude review is NOT active. Tell the user exactly that, and that the `ccc-review`
 plugin hooks are probably not installed or not trusted (check `/plugins` and
-`/hooks`, and that Node.js ≥ 22.18 is on PATH). Do nothing else.
+`/hooks`, and that Node.js ≥ 24 is on PATH). Do nothing else.

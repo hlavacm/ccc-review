@@ -201,6 +201,11 @@ Suite: 331 deterministic tests (103 unit, 228 integration), all passing; `pnpm c
 - Removed dead code: `RunOptions.env`, re-exports kept only for tests, unused fake-CLI type aliases.
 - `CHANGELOG.md` has no `[Unreleased]` section: nothing was published before 1.0.0. Tag `v1.0.0` after the first push so its links resolve.
 
+### After the first push (2026-09-19)
+
+- First GitHub Actions run: both jobs (Node 22.18 and 24) passed. The owner then raised the supported minimum to Node 24, the active LTS: `engines.node` is `>=24`, README, skills and CLAUDE.md say so, and CI runs one job. Earlier notes in these feature files mention 22.18 as the minimum; that was true when they were written.
+- CI actions moved to the majors that run on Node 24 (`actions/checkout@v7`, `pnpm/action-setup@v6`, `actions/setup-node@v7`); the `@v4` ones ran on the deprecated Node 20 runtime.
+
 ### Ideas for v2 (only if real use asks for them)
 
 - Publish the marketplace from GitHub (`claude plugin marketplace add owner/repo`, `codex plugin marketplace add owner/repo`) and tag releases with `claude plugin tag`.

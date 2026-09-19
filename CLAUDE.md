@@ -10,7 +10,7 @@ The spec in `docs/` is normative, and `docs/testing.md` governs testing. Develop
 
 ## Commands
 
-The package manager is pnpm. Node ≥ 22.18 runs `.ts` directly via native type stripping, so tests need no build step.
+The package manager is pnpm. Node ≥ 24 (the supported minimum; the active LTS) runs `.ts` directly via native type stripping, so tests need no build step.
 
 ```sh
 pnpm check              # typecheck + lint + test + build (the completion gate)

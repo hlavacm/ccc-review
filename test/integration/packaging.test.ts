@@ -45,8 +45,10 @@ describe("package contents", () => {
 	});
 
 	it("CI runs the suite on the minimum supported Node version", () => {
-		const min = /^>=(\d+\.\d+)$/.exec(readJson("package.json").engines.node);
-		assert.ok(min, "engines.node is >=<major.minor>");
+		const min = /^>=(\d+(?:\.\d+)?)$/.exec(
+			readJson("package.json").engines.node,
+		);
+		assert.ok(min, "engines.node is >=<major[.minor]>");
 		const ci = readFileSync(join(repoRoot, ".github/workflows/ci.yml"), "utf8");
 		const matrix = /node: \[(.*)\]/.exec(ci)?.[1] ?? "";
 		assert.ok(matrix.includes(`"${min[1]}"`), `CI node matrix: ${matrix}`);

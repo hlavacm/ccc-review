@@ -12,7 +12,7 @@ or Codex to implement and Claude Code to review.
 [![CI](https://github.com/hlavacm/ccc-review/actions/workflows/ci.yml/badge.svg)](https://github.com/hlavacm/ccc-review/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/version-1.0.0-blue)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A5%2022.18-339933?logo=nodedotjs&logoColor=white)](#requirements)
+[![Node](https://img.shields.io/badge/node-%E2%89%A5%2024-339933?logo=nodedotjs&logoColor=white)](#requirements)
 [![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-D97757)](#claude-code-claude-writes-codex-reviews)
 [![Codex plugin](https://img.shields.io/badge/Codex-plugin-412991)](#codex-codex-writes-claude-code-reviews)
 
@@ -121,7 +121,7 @@ prefixed `CCC Review`.
 
 ## Requirements
 
-- macOS or Linux, Git, and Node.js ≥ 22.18 on `PATH`.
+- macOS or Linux, Git, and Node.js ≥ 24 on `PATH`.
 - **Claude writes, Codex reviews**: Claude Code with plugin support, and the
   Codex CLI authenticated with `codex login` (or `CODEX_API_KEY`).
 - **Codex writes, Claude reviews**: the Codex CLI with plugin hooks, and
@@ -132,7 +132,7 @@ prefixed `CCC Review`.
 key) and refuses to enable review otherwise.
 
 Developed with Claude Code 2.1.278, codex-cli 0.155.1 and Node.js 26; CI runs
-the test suite on Node.js 22.18 and 24.
+the test suite on Node.js 24.
 
 ## Install
 
@@ -419,7 +419,7 @@ data directory, unless you set `CCC_REVIEW_STATE_DIR`).
 
 ## Testing
 
-You need Node.js ≥ 22.18, Git and pnpm. From a fresh clone:
+You need Node.js ≥ 24, Git and pnpm. From a fresh clone:
 
 ```sh
 pnpm install --frozen-lockfile
