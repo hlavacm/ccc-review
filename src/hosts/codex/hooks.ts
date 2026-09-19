@@ -77,17 +77,17 @@ export async function handlePromptSubmit(
 ): Promise<HookOutput | undefined> {
 	const prompt = promptText(input);
 	const command = COMMAND.exec(prompt);
-	if (command)
-		return {
-			decision: "block",
-			reason: await runCommand(
-				c,
-				ROLES,
-				input.session_id,
-				input.cwd,
-				(command[1] ?? "").trim(),
-			),
-		};
+	if (command) {
+		const reason = await runCommand(
+			c,
+			ROLES,
+			input.session_id,
+			input.cwd,
+			(command[1] ?? "").trim(),
+		);
+		// undefined: an armed `current` lets the skill mention reach Codex.
+		return reason === undefined ? undefined : { decision: "block", reason };
+	}
 	if (!prompt || input.agent_id !== undefined) return undefined;
 	await recordPrompt(c, ROLES, input.session_id, prompt);
 	return undefined;

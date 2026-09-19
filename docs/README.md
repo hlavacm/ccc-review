@@ -69,6 +69,7 @@ Implement features in numeric order unless explicitly instructed otherwise:
 3. `03-stabilize-claude-to-codex.md`
 4. `04-codex-to-claude.md`
 5. `05-packaging-and-docs.md`
+6. `06-review-current-changes.md`
 
 The project should already be genuinely useful after feature 02.
 

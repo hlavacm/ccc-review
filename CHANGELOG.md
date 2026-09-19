@@ -17,6 +17,10 @@ First release.
 - **Codex writer → Claude Code reviewer**: a Codex plugin with the
   `$ccc-review on|off|status` command. Every time Codex finishes a turn, a
   read-only `claude -p` reviews the changes and the findings go back to Codex.
+- **Audit after the work**: `/ccc-review:current` / `$ccc-review current` has the writer
+  write down the task, its plan and its report, and the other agent audits
+  the uncommitted changes once. Findings are shown, nothing is fixed
+  automatically.
 - Structured verdicts (`APPROVED`, `CHANGES_REQUESTED`, `NEEDS_HUMAN`) with
   stable finding IDs (`CCC-001`, …) preserved across rounds.
 - Bounded loop: at most 3 rounds by default (`CCC_REVIEW_MAX_ROUNDS`), and one

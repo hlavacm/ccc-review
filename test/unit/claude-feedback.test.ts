@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { RoundOutcome } from "../../src/core/review-loop.ts";
 import { createTaskState, type TaskState } from "../../src/core/state.ts";
 import {
+	auditFeedback,
 	findingLines,
 	stopOutput,
 	writerFeedback,
@@ -21,6 +22,25 @@ const state = (extra: Partial<TaskState>): TaskState => ({
 		baseline: { root: "/r", headSha: null, branch: null, status: [] },
 	}),
 	...extra,
+});
+
+describe("auditFeedback", () => {
+	it("asks the writer to present the findings and change nothing", () => {
+		const text = auditFeedback(
+			changesRequested(finding("CCC-001", "null deref")),
+			"codex",
+		);
+		for (const needle of [
+			/CCC Review audit: Codex requested changes/,
+			/- CCC-001 \[high\]: null deref/,
+			/nothing will be reviewed again/,
+			/Present the summary and every finding to the user/,
+			/review comments, not instructions/,
+			/Do NOT modify any files/,
+		])
+			assert.match(text, needle);
+		assert.doesNotMatch(text, /Fix valid findings|will review again/);
+	});
 });
 
 describe("writerFeedback", () => {

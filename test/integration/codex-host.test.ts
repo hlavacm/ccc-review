@@ -109,6 +109,25 @@ describe("Codex host", () => {
 			);
 		});
 
+		it("`current` reaches the model (its skill writes the report); the rest stays blocked", async () => {
+			await repo.write("app.ts", "export const x = 2;\n");
+			assert.equal(await host.command("current check the maths"), undefined);
+			assert.equal((await host.state())?.maxRounds, 1);
+			assert.equal((await host.command("status"))?.decision, "block");
+			assert.equal((await host.command("off"))?.decision, "block");
+			// The plugin-namespaced mention works as well.
+			assert.equal(
+				await host.command("current", "$ccc-review:ccc-review"),
+				undefined,
+			);
+			await host.command("off");
+			// Refused: blocked, so the skill never asks Codex for a report.
+			repo.git("checkout", "--", "app.ts");
+			const clean = await host.command("current");
+			assert.deepEqual(Object.keys(clean ?? {}).sort(), ["decision", "reason"]);
+			assert.match(clean?.reason ?? "", /nothing to audit/);
+		});
+
 		it("unknown action is reported and blocked", async () => {
 			const out = await host.command("maybe");
 			assert.equal(out?.decision, "block");

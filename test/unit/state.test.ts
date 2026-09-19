@@ -198,6 +198,11 @@ describe("review history", () => {
 	it("appends entries in order with a timestamp and reads them back", async () => {
 		const result = changesRequested(finding("CCC-001"));
 		await appendHistory(join(dir, "nested"), "t1", { event: "on" });
+		await appendHistory(join(dir, "nested"), "t2", { event: "audit" });
+		assert.equal(
+			(await readHistory(join(dir, "nested"), "t2"))[0]?.event,
+			"audit",
+		);
 		await appendHistory(join(dir, "nested"), "t1", {
 			event: "round",
 			round: 1,

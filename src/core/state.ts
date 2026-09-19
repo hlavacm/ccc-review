@@ -197,7 +197,8 @@ function isBaseline(value: unknown): value is GitBaseline {
 export interface HistoryEntry {
 	/** ISO timestamp. */
 	at: string;
-	event: "on" | "round" | "off";
+	/** "audit": a one-round review of the current changes was armed. */
+	event: "on" | "audit" | "round" | "off";
 	round?: number;
 	/** Round outcome, e.g. "approved" or "reviewer_error". */
 	outcome?: string;
@@ -205,7 +206,7 @@ export interface HistoryEntry {
 	error?: string;
 }
 
-const HISTORY_EVENTS: readonly string[] = ["on", "round", "off"];
+const HISTORY_EVENTS: readonly string[] = ["on", "audit", "round", "off"];
 
 /** Appends one line to `<dir>/<taskId>.jsonl`; the log is only ever appended. */
 export async function appendHistory(

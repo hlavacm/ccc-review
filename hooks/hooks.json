@@ -2,7 +2,7 @@
 	"hooks": {
 		"UserPromptExpansion": [
 			{
-				"matcher": "^ccc-review:(on|off|status)$",
+				"matcher": "^ccc-review:(on|current|off|status)$",
 				"hooks": [
 					{
 						"type": "command",

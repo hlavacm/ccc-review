@@ -89,10 +89,15 @@ describe("plugin manifest", () => {
 	// Claude Code, and the command name always arrives namespaced, so a bare
 	// matcher never reached the command hook. With `:` it is an (unanchored)
 	// regex and must anchor itself.
-	it("command matcher selects the three commands and nothing else", () => {
+	it("command matcher selects the four commands and nothing else", () => {
 		const matcher = hooksJson.hooks.UserPromptExpansion?.[0]?.matcher;
 		assert.ok(matcher);
-		for (const name of ["ccc-review:on", "ccc-review:off", "ccc-review:status"])
+		for (const name of [
+			"ccc-review:on",
+			"ccc-review:current",
+			"ccc-review:off",
+			"ccc-review:status",
+		])
 			assert.ok(claudeCodeMatches(matcher, name), name);
 		for (const name of [
 			"deploy",
@@ -110,8 +115,10 @@ describe("plugin manifest", () => {
 
 	it("every command the matcher selects has a skill, and the reverse", () => {
 		const skills = readdirSync(join(pluginRoot, "skills")).sort();
-		assert.deepEqual(skills, ["off", "on", "status"]);
+		assert.deepEqual(skills, ["current", "off", "on", "status"]);
+		const matcher = hooksJson.hooks.UserPromptExpansion?.[0]?.matcher ?? "";
 		for (const skill of skills) {
+			assert.ok(claudeCodeMatches(matcher, `ccc-review:${skill}`), skill);
 			const body = readFileSync(
 				join(pluginRoot, "skills", skill, "SKILL.md"),
 				"utf8",
@@ -122,7 +129,13 @@ describe("plugin manifest", () => {
 				/^---\n[\s\S]*disable-model-invocation: true[\s\S]*\n---\n/,
 				skill,
 			);
-			assert.match(body, /NOT/, skill);
+			// The fallbacks say the action did NOT happen; `current` is a real
+			// prompt that must keep the writer's hands off the repository.
+			assert.match(
+				body,
+				skill === "current" ? /Do not modify any files/ : /NOT/,
+				skill,
+			);
 		}
 	});
 

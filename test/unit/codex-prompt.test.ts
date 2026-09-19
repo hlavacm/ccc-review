@@ -60,6 +60,7 @@ describe("buildReviewPrompt", () => {
 			}),
 		);
 		assert.match(p, /ALREADY dirty/);
+		assert.doesNotMatch(p, /one-off audit/);
 		assert.match(p, / {2}\?\? a file\.txt/);
 		assert.match(p, /R {2}old\.ts -> new\.ts/);
 		assert.match(p, /\(no commits\)/);
@@ -239,5 +240,26 @@ describe("buildReviewPrompt language", () => {
 		const p = buildReviewPrompt(request());
 		assert.match(p, /Write the summary and finding messages in English/);
 		assert.doesNotMatch(p, /in the language of/);
+	});
+});
+
+describe("buildReviewPrompt audit", () => {
+	it("treats every uncommitted change as the writer's work", () => {
+		const p = buildReviewPrompt(
+			request({
+				baseline: {
+					root: "/r",
+					headSha: "abc",
+					branch: "main",
+					status: [{ code: " M", path: "a.ts" }],
+				},
+				context: { report: "Task… Plan… Report…", audit: true },
+			}),
+		);
+		assert.match(p, /one-off audit requested after the work was done/);
+		assert.match(p, /ALL uncommitted changes .* they are the writer's work/);
+		assert.match(p, / {3}M a\.ts/);
+		assert.doesNotMatch(p, /ALREADY dirty|may not belong to the writer/);
+		assert.match(p, /git diff abc/);
 	});
 });

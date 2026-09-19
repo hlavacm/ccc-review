@@ -76,6 +76,7 @@ describe("Claude Code host", () => {
 				"ccc-review",
 				"ccc-review:ccc-review",
 				"ccc-review:bogus",
+				"ccc-review:currently",
 				"other:on",
 				"ccc-review:on ",
 			])
@@ -373,6 +374,24 @@ describe("Claude Code host", () => {
 			assert.match(
 				out?.reason ?? "",
 				/not enabled: codex executable not found: .*CCC_REVIEW_CODEX_BIN/,
+			);
+			assert.equal(await h.taskId(), undefined);
+		});
+
+		it("`current` with a missing codex binary is refused too, and blocked", async () => {
+			const h = new ClaudeHostHarness(
+				{
+					stateDir,
+					reviewer: new CodexReviewer({ bin: join(stateDir, "nope"), env: {} }),
+				},
+				repo.root,
+			);
+			await repo.write("app.ts", "export const x = 2;\n");
+			const out = await h.command("current");
+			assert.equal(out?.decision, "block");
+			assert.match(
+				out?.reason ?? "",
+				/not enabled: codex executable not found/,
 			);
 			assert.equal(await h.taskId(), undefined);
 		});

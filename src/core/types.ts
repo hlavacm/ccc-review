@@ -68,6 +68,11 @@ export interface ReviewContext {
 	task?: string;
 	/** Writer's implementation report (e.g. its last message). */
 	report?: string;
+	/**
+	 * One-off audit requested after the work: every uncommitted change is the
+	 * writer's work, not pre-existing dirty state.
+	 */
+	audit?: boolean;
 }
 
 export interface Reviewer {

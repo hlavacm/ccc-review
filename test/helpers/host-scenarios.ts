@@ -315,6 +315,138 @@ export function hostScenarios(d: Direction): void {
 				});
 		});
 
+		describe("one-shot audit of uncommitted work", () => {
+			it("is not blocked, reviews once and approval ends it", async () => {
+				await setup([approved()]);
+				await repo.write("app.ts", "export const x = 2;\n");
+				await repo.write("new.ts", "export const y = 1;\n");
+				// Not blocked: the skill text must reach the writer.
+				assert.equal(
+					await host.command("current was asked to make x 2"),
+					undefined,
+				);
+				const armed = await host.state();
+				assert.equal(armed?.active, true);
+				assert.equal(armed?.maxRounds, 1);
+				assert.match(
+					(await host.command("status"))?.reason ?? "",
+					/mode: audit/,
+				);
+
+				const out = await host.stop(
+					"Task: make x 2. Plan: edit app.ts. Report: done.",
+				);
+				assert.equal(out?.decision, undefined);
+				assert.match(
+					out?.systemMessage ?? "",
+					new RegExp(`${d.reviewer} APPROVED`),
+				);
+				assert.equal((await host.state())?.active, false);
+				const [call] = (await env?.calls()) ?? [];
+				assert.match(call?.stdin ?? "", /one-off audit/);
+				assert.match(call?.stdin ?? "", /uncommitted changes/);
+				assert.match(call?.stdin ?? "", / M app\.ts/);
+				assert.match(call?.stdin ?? "", /\?\? new\.ts/);
+				assert.doesNotMatch(call?.stdin ?? "", /ALREADY dirty/);
+				assert.match(
+					call?.stdin ?? "",
+					/Original task:\nwas asked to make x 2/,
+				);
+				assert.match(call?.stdin ?? "", /Plan: edit app\.ts/);
+				assert.equal(await calls(), 1);
+			});
+
+			it("findings come back once: shown, nothing fixed, no second round", async () => {
+				await setup([
+					changesRequested(finding("CCC-001", "x must be 3")),
+					approved(),
+				]);
+				await repo.write("app.ts", "export const x = 2;\n");
+				await host.command("current");
+				const out = await host.stop("Report: x is 2.");
+				assert.equal(out?.decision, "block");
+				assert.match(
+					out?.reason ?? "",
+					new RegExp(`CCC Review audit: ${d.reviewer} requested changes`),
+				);
+				assert.match(out?.reason ?? "", /- CCC-001 \[high\]: x must be 3/);
+				assert.match(out?.reason ?? "", /Do NOT modify any files/);
+				assert.doesNotMatch(out?.reason ?? "", /will review again/);
+				const state = await host.state();
+				assert.equal(state?.active, false);
+				assert.equal(state?.round, 1);
+				// The writer presents the findings and finishes: no re-review.
+				assert.equal(
+					await host.stop("Here are the findings…", true),
+					undefined,
+				);
+				assert.equal(await calls(), 1);
+				const status = (await host.command("status"))?.reason ?? "";
+				assert.match(status, /audit\n.*round 1: CHANGES_REQUESTED/);
+				assert.doesNotMatch(status, /max rounds reached/);
+			});
+
+			it("is refused when there is nothing uncommitted", async () => {
+				const out = await host.command("current");
+				assert.equal(out?.decision, "block");
+				assert.match(out?.reason ?? "", /nothing to audit/);
+				assert.equal(await host.state(), undefined);
+				assert.equal(await host.stop("done"), undefined);
+				assert.equal(await calls(), 0);
+			});
+
+			it("is refused while review is already on; that task is untouched", async () => {
+				await setup([approved()]);
+				await host.command("on");
+				const task = (await host.state())?.taskId;
+				await repo.write("app.ts", "export const x = 2;\n");
+				const out = await host.command("current");
+				assert.equal(out?.decision, "block");
+				assert.match(out?.reason ?? "", /already active/);
+				const state = await host.state();
+				assert.equal(state?.taskId, task);
+				assert.equal(state?.maxRounds, 3);
+			});
+
+			it("a failing reviewer is not approval", async () => {
+				await setup([{ fail: "nonzero" }]);
+				await repo.write("app.ts", "export const x = 2;\n");
+				await host.command("current");
+				const out = await host.stop("report");
+				assert.equal(out?.decision, undefined);
+				assert.match(
+					out?.systemMessage ?? "",
+					/FAILED — the change is NOT approved/,
+				);
+				assert.equal((await host.state())?.lastResult, undefined);
+			});
+
+			it("a duplicate completion runs one round; off cancels an armed audit", async () => {
+				await setup([changesRequested(), approved()]);
+				await repo.write("app.ts", "export const x = 2;\n");
+				await host.command("current");
+				await Promise.all([host.stop("same"), host.stop("same")]);
+				assert.equal(await calls(), 1);
+
+				await host.command("current");
+				assert.match((await host.command("off"))?.reason ?? "", /disabled/);
+				assert.equal(await host.stop("later"), undefined);
+				assert.equal(await calls(), 1);
+			});
+
+			it("never mutates Git state", async () => {
+				await setup([changesRequested()]);
+				await repo.write("app.ts", "export const x = 2;\n");
+				repo.git("add", "app.ts");
+				await repo.write("new.ts", "y\n");
+				const before = await captureBaseline(repo.root);
+				await host.command("current");
+				await host.stop("report");
+				assert.deepEqual(await captureBaseline(repo.root), before);
+				assert.equal(repo.git("stash", "list"), "");
+			});
+		});
+
 		it("state directories (prompts, findings) are private to the user", async () => {
 			await setup([changesRequested()]);
 			// An older version created them with the default umask.

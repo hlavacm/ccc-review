@@ -84,7 +84,9 @@ export function buildReviewPrompt(
 	if (baseline.status.length > 0) {
 		lines.push(
 			"",
-			"The working tree was ALREADY dirty when review was activated. These changes may not belong to the writer; do not blame the writer for them unless the writer touched them:",
+			context?.audit
+				? "This is a one-off audit requested after the work was done. Review ALL uncommitted changes (staged, unstaged and untracked files); they are the writer's work:"
+				: "The working tree was ALREADY dirty when review was activated. These changes may not belong to the writer; do not blame the writer for them unless the writer touched them:",
 			...baseline.status
 				.slice(0, MAX_BASELINE_PATHS)
 				.map(

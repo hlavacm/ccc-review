@@ -103,7 +103,7 @@ flowchart LR
 | --- | --- | --- |
 | **Writer** (you work with it) | Claude Code | Codex |
 | **Reviewer** (headless, read-only) | `codex exec --sandbox read-only` | `claude -p --tools Read,Grep,Glob` |
-| **Command** | `/ccc-review:on`, `/ccc-review:off`, `/ccc-review:status` | `$ccc-review on\|off\|status` |
+| **Command** | `/ccc-review:on`, `/ccc-review:current`, `/ccc-review:off`, `/ccc-review:status` | `$ccc-review on\|current\|off\|status` |
 | **Trigger** | Claude Code `Stop` hook | Codex `Stop` hook |
 
 - **Writer**: plans, implements, and evaluates each finding: it fixes valid
@@ -186,6 +186,7 @@ command per action:
 
 ```text
 /ccc-review:on [task description]   # check Codex, record Git baseline, arm review (does not start Claude)
+/ccc-review:current [note]          # one-off audit of the uncommitted changes, after the work (see below)
 /ccc-review:status                  # state, round n/3, reviewer settings, history, file paths
 /ccc-review:off                     # disarm (also stops further rounds of this task)
 ```
@@ -215,6 +216,7 @@ reaches the model. `$ccc-review:ccc-review …` works too.
 
 ```text
 $ccc-review on [task description]   # check Claude, record Git baseline, arm review (does not start Codex)
+$ccc-review current [note]          # one-off audit of the uncommitted changes, after the work (see below)
 $ccc-review status                  # state, round n/3, reviewer settings, history
 $ccc-review off                     # disarm
 ```
@@ -229,6 +231,33 @@ CCC Review round 1/3: Claude requested changes. (Codex continues with the findin
 … Codex: "CCC-001: fixed …" …
 CCC Review: Claude APPROVED (round 2/3).
 ```
+
+### Audit after the work: `current`
+
+`on` has to be armed before the writer starts. When the work is already done
+and you want a second opinion on it, use `current`:
+
+```text
+… Claude planned and implemented something; nothing is committed yet …
+> /ccc-review:current please check the error handling
+… Claude writes the task, its plan and its report for the reviewer and finishes …
+CCC Review audit: Codex requested changes.
+- CCC-001 [high] api.ts:41: …
+… Claude presents the findings with its own assessment and changes nothing …
+```
+
+- The command is not blocked like the others: its skill asks the writer to
+  write down the task, its plan and its report, because only the writer knows
+  them. That message and the real Git changes go to the reviewer. This is also
+  the only way the writer's plan reaches the reviewer.
+- It reviews the uncommitted changes only (staged, unstaged, untracked) and
+  treats all of them as the writer's work. Committed work is not audited;
+  with a clean tree the command is refused.
+- One round, no loop: the findings come back once, the writer shows them and
+  changes nothing, and you decide what to fix. Run `current` again for another
+  opinion after fixing.
+- It is refused while `on` is active in the session. A reviewer failure is an
+  error, never approval.
 
 ### Rounds, stop conditions and errors
 
@@ -417,6 +446,8 @@ data directory, unless you set `CCC_REVIEW_STATE_DIR`).
 - Codex does not document whether the TUI delivers a skill mention as the
   literal `$ccc-review`. If the hook does not handle it, the `ccc-review` skill tells you
   that review was NOT enabled.
+- An armed `$ccc-review current` relies on Codex loading the skill text for the
+  mention; that was not exercised in the real Codex TUI.
 - The interactive TUIs are covered by hook-level tests and smoke tests, not by
   an automated TUI session.
 

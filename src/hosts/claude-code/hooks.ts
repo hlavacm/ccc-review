@@ -66,9 +66,12 @@ export function configFromEnv(env: NodeJS.ProcessEnv): HostConfig {
  * `<plugin>:<skill>` and always reports it that way (observed in 2.1.278).
  * A bare `on` or `status` is another command, e.g. the built-in `/status`.
  */
-const COMMAND = /^ccc-review:(on|off|status)$/;
+const COMMAND = /^ccc-review:(on|current|off|status)$/;
 
-/** UserPromptExpansion: `/ccc-review:on [task]`, `/ccc-review:off`, `/ccc-review:status`. */
+/**
+ * UserPromptExpansion: `/ccc-review:on [task]`, `/ccc-review:current [note]`,
+ * `/ccc-review:off`, `/ccc-review:status`.
+ */
 export async function handleCommand(
 	c: HostConfig,
 	input: HookInput,
@@ -77,21 +80,21 @@ export async function handleCommand(
 		typeof input.command_name === "string" &&
 		COMMAND.exec(input.command_name)?.[1];
 	if (!action) return undefined;
-	// Only `on` takes arguments: the task description.
+	// Only `on` and `current` take arguments: the task description.
 	const task =
-		action === "on" && typeof input.command_args === "string"
+		(action === "on" || action === "current") &&
+		typeof input.command_args === "string"
 			? input.command_args.trim()
 			: "";
-	return {
-		decision: "block",
-		reason: await runCommand(
-			c,
-			ROLES,
-			input.session_id,
-			input.cwd,
-			`${action} ${task}`.trim(),
-		),
-	};
+	const reason = await runCommand(
+		c,
+		ROLES,
+		input.session_id,
+		input.cwd,
+		`${action} ${task}`.trim(),
+	);
+	// undefined: an armed `current` lets its skill text reach Claude.
+	return reason === undefined ? undefined : { decision: "block", reason };
 }
 
 /** UserPromptSubmit: remember the user's task text while review is active. */
