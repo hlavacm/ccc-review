@@ -1,11 +1,13 @@
 {
 	"name": "cccr",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"description": "CCCR (Claude Code ↔ Codex Review): Claude Code independently reviews Codex's changes; findings go back to Codex in a bounded loop.",
 	"author": {
 		"name": "Martin Hlaváč"
 	},
 	"license": "MIT",
+	"homepage": "https://github.com/hlavacm/ccc-review",
+	"repository": "https://github.com/hlavacm/ccc-review",
 	"skills": "./codex/skills/",
 	"hooks": "./codex/hooks.json"
 }

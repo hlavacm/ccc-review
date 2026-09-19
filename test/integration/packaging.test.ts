@@ -108,10 +108,35 @@ describe("package contents", () => {
 });
 
 describe("README", () => {
-	it("starts with the project tagline", () => {
+	it("opens with the logo, title and tagline before the first section", () => {
+		const header = readme.slice(0, readme.indexOf("\n## "));
+		assert.match(header, /<img [^>]*src="assets\/icon\/512x512\.png"/);
+		assert.match(header, /\n# CCC Review\n/);
+		assert.ok(header.includes("Claude Code ↔ Codex Review"));
 		assert.ok(
-			readme.startsWith(
-				"# CCCR\n\nClaude Code ↔ Codex Review\n\nUse Claude Code to implement and Codex to review,\nor Codex to implement and Claude Code to review.\n",
+			header.includes(
+				"Use Claude Code to implement and Codex to review,\nor Codex to implement and Claude Code to review.\n",
+			),
+		);
+	});
+
+	it("links only to files that are packaged", () => {
+		const packaged = packagedFiles(repoRoot);
+		const targets = [
+			...readme.matchAll(/\]\(([^)\s]+)\)|\bsrc="([^"]+)"/g),
+		].map((m) => (m[1] ?? m[2] ?? "").split("#")[0] ?? "");
+		const local = targets.filter((t) => t !== "" && !/^[a-z]+:/.test(t));
+		assert.ok(local.includes("assets/icon/512x512.png"));
+		for (const target of local) assert.ok(packaged.includes(target), target);
+	});
+
+	it("shows the released version, which the changelog describes", () => {
+		const version = readJson("package.json").version;
+		assert.ok(readme.includes(`badge/version-${version}-`), "version badge");
+		assert.match(
+			readFileSync(join(repoRoot, "CHANGELOG.md"), "utf8"),
+			new RegExp(
+				`\\n## \\[${version.replaceAll(".", "\\.")}\\] - \\d{4}-\\d{2}-\\d{2}\\n`,
 			),
 		);
 	});
