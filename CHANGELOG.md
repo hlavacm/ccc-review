@@ -10,6 +10,9 @@ All notable changes to this project are documented here. The format follows
 
 - Finding IDs are no longer reused within a task: new findings are numbered
   after the highest ID of any earlier round, not only the previous one.
+- An unreadable session or task state file no longer wedges the session: `on`
+  starts a fresh task and `off` resets the session; `status` says so.
+- CI also runs on the minimum supported Node version (22.18).
 
 ## [1.0.0] - 2026-09-19
 

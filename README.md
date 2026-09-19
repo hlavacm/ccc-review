@@ -377,6 +377,7 @@ data directory, unless you set `CCC_REVIEW_STATE_DIR`).
 | `… timed out after 20 min — raise CCC_REVIEW_CODEX_TIMEOUT_MS …` | raise the timeout, but keep it under the Stop hook's 30 min |
 | `… returned invalid JSON: …` / `an invalid review: …` | usually transient; the excerpt shows what the reviewer produced |
 | `… exited with code N: <last stderr lines>` | read the stderr lines; auth errors add the login hint |
+| `CCC Review error: corrupt state file …` (or another unreadable-state error) on every prompt | run the command with `on` to start a fresh task or `off` to reset the session |
 | `$ccc-review on` does nothing in Codex | the hooks are not trusted yet: open `/hooks` |
 
 </details>

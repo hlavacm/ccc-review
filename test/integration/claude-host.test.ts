@@ -381,6 +381,19 @@ describe("Claude Code host", () => {
 			const out = await host.command("status");
 			assert.equal(out?.decision, "block");
 			assert.match(out?.reason ?? "", /CCC Review error/);
+			assert.match(out?.reason ?? "", /use "on" .* or "off"/);
+		});
+
+		it("on with an invalid session id is an error and creates no task", async () => {
+			const out = await host.send("command", {
+				session_id: "../x",
+				cwd: repo.root,
+				command_name: "ccc-review",
+				command_args: "on",
+			});
+			assert.equal(out?.decision, "block");
+			assert.match(out?.reason ?? "", /invalid session_id/);
+			assert.deepEqual(await readdir(stateDir), []);
 		});
 
 		it("invalid hook payloads are reported", async () => {

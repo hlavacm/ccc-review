@@ -189,6 +189,10 @@ Suite: 331 deterministic tests (103 unit, 228 integration), all passing; `pnpm c
 
 - Naming unified before publishing: `CCC Review` in human-readable text (messages, prompts, skills, docs, README title) and `ccc-review` in code and paths (plugin and skill `ccc-review`, so `/ccc-review:ccc-review` and `$ccc-review`; marketplace `hlavacm`; state dir `~/.ccc-review`; package name). Environment variables cannot contain `-`, so they use `CCC_REVIEW_*`. `packaging.test.ts` checks the `# CCC Review` heading, the install/uninstall ids against the manifests and that every `CCC_REVIEW_*` variable read in `src/` is documented.
 
+### Audit of features 01–05 (2026-09-19)
+
+- `.github/workflows/ci.yml` ran only Node 24 although `engines.node` is `>=22.18` and these notes said "22.18 and 24". The matrix is now `["22.18", "24"]`, and `packaging.test.ts` "CI runs the suite on the minimum supported Node version" ties it to `package.json` (failed first). Not verified: an actual run on Node 22.18 (no remote, only Node 26 locally).
+
 ### Ideas for v2 (only if real use asks for them)
 
 - Publish the marketplace from GitHub (`claude plugin marketplace add owner/repo`, `codex plugin marketplace add owner/repo`) and tag releases with `claude plugin tag`.

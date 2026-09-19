@@ -150,7 +150,20 @@ export async function runCommand(
 ): Promise<string> {
 	const reply = (text: string) => `CCC Review: ${text}`;
 	const action = args.split(/\s+/)[0] || "status";
-	const { state } = await currentTask(c, roles, sessionId);
+	// Unreadable state must not wedge the session: `on` replaces it and `off`
+	// resets the session; anything else reports it with the way out.
+	sessionFile(c, sessionId); // an invalid session id is never recoverable
+	let state: TaskState | undefined;
+	let broken = "";
+	try {
+		({ state } = await currentTask(c, roles, sessionId));
+	} catch (error) {
+		if (action !== "on" && action !== "off")
+			throw new Error(
+				`${(error as Error).message} — use "on" to start a fresh task or "off" to reset this session`,
+			);
+		broken = (error as Error).message;
+	}
 
 	switch (action) {
 		case "on": {
@@ -184,12 +197,23 @@ export async function runCommand(
 			return reply(
 				[
 					`enabled. ${agentName(roles.reviewer)} will review when ${agentName(roles.writer)} finishes.`,
+					...(broken
+						? [
+								`The previous state was unreadable and was replaced (${broken}).`,
+							]
+						: []),
 					...dirtyWarning(task),
 					describe(task),
 				].join("\n"),
 			);
 		}
 		case "off":
+			if (broken) {
+				await rm(sessionFile(c, sessionId), { force: true });
+				return reply(
+					`disabled. The state was unreadable, so this session was reset (${broken}).`,
+				);
+			}
 			if (!state?.active) return reply("already off.");
 			await saveState(tasksDir(c), { ...state, active: false });
 			await appendHistory(historyDir(c), state.taskId, {

@@ -135,6 +135,10 @@ Codex CLI 0.155.1; `model_reasoning_effort` values and `CODEX_API_KEY` for `code
 - The login tests depended on the developer's environment: a set `CODEX_API_KEY` switched the preflight off (4 failures). `test/setup.ts` removes it (except for `pnpm test:smoke`); verified with `CODEX_API_KEY=sk-test pnpm test`.
 - #7 `state.test.ts` "review history", `claude-host.test.ts` "history and status", "dirty repository warning", "configured max rounds", configuration cases.
 
+### Fixed in the audit of features 01–05 (2026-09-19; regression tests verified to fail first)
+
+- A corrupt `sessions/<id>.json` or `tasks/<id>.json` wedged the session: `runCommand` loaded the state before looking at the action, so `on` and `off` failed too and every prompt and Stop kept reporting the error until the files were deleted by hand (requirement 7). `on` now starts a fresh task and says the old state was replaced, `off` removes the session file, and `status` reports the error with both ways out. Stop and prompt hooks are unchanged: the error is a `systemMessage`, never a block or an approval. An invalid `session_id` stays an error and creates nothing. Regressions: `host-scenarios.ts` "corrupt sessions/tasks state is recoverable" (3 scenarios × 2 kinds × both directions; all 12 failed before the fix), `claude-host.test.ts` "on with an invalid session id …".
+
 ### Real-use checklist results
 
 - 2026-09-19 `pnpm test:smoke` (real Codex CLI 0.155.1, disposable repo, outside the development sandbox): passed in 33 s. `/ccc-review:ccc-review on` preflight passed; Codex found the planted `multiply` bug (`CCC-001 [high] math.js:2`, verified `multiply(2, 3)` returns 5), the Stop hook blocked with the finding and instructions, status showed round 1/3 with history, and Git state was unchanged.

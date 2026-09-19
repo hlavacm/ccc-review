@@ -2,6 +2,8 @@
 // direction supplies its real host adapter (driven by a harness with
 // realistic hook payloads) and its real reviewer adapter spawning a fake CLI.
 import assert from "node:assert/strict";
+import { readdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import type { TaskState } from "../../src/core/state.ts";
 import type { ReviewResult } from "../../src/core/types.ts";
@@ -301,6 +303,66 @@ export function hostScenarios(d: Direction): void {
 					assert.equal(await host.stop("done again"), undefined);
 				});
 		});
+
+		// A wedged session must be recoverable with the commands the user has.
+		for (const kind of ["sessions", "tasks"] as const)
+			describe(`corrupt ${kind} state is recoverable`, () => {
+				async function corrupt() {
+					const dir = join(stateDir, kind);
+					for (const file of await readdir(dir))
+						await writeFile(join(dir, file), "{broken");
+				}
+
+				it("is reported, never reviewed or approved, and status says how to recover", async () => {
+					await setup([approved()]);
+					await host.command("on");
+					await corrupt();
+					const out = await host.stop("done");
+					assert.equal(out?.decision, undefined);
+					assert.match(out?.systemMessage ?? "", /CCC Review error/);
+					assert.doesNotMatch(out?.systemMessage ?? "", /APPROVED/);
+					assert.equal(await calls(), 0);
+					const status = await host.command("status");
+					assert.equal(status?.decision, "block");
+					assert.match(status?.reason ?? "", /CCC Review error/);
+					assert.match(status?.reason ?? "", /"on".*"off"/);
+				});
+
+				it("on starts a fresh task that is reviewed normally", async () => {
+					await setup([approved()]);
+					await host.command("on");
+					const broken = (await host.state())?.taskId;
+					await corrupt();
+					const out = await host.command("on");
+					assert.match(out?.reason ?? "", /CCC Review: enabled/);
+					assert.match(out?.reason ?? "", /unreadable/);
+					const state = await host.state();
+					assert.equal(state?.active, true);
+					assert.equal(state?.round, 0);
+					assert.notEqual(state?.taskId, broken);
+					assert.match(
+						(await host.stop("done"))?.systemMessage ?? "",
+						/APPROVED/,
+					);
+					assert.equal(await calls(), 1);
+				});
+
+				it("off resets the session; hooks go quiet", async () => {
+					await setup([approved()]);
+					await host.command("on");
+					await corrupt();
+					const out = await host.command("off");
+					assert.match(out?.reason ?? "", /CCC Review: disabled/);
+					assert.match(out?.reason ?? "", /unreadable/);
+					assert.equal(await host.prompt("next task"), undefined);
+					assert.equal(await host.stop("done"), undefined);
+					assert.equal(await calls(), 0);
+					assert.match(
+						(await host.command("status"))?.reason ?? "",
+						/off \(never enabled/,
+					);
+				});
+			});
 
 		it("the whole flow never mutates Git state", async () => {
 			await setup([changesRequested(), approved()]);
