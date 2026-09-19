@@ -1,8 +1,8 @@
-# CCCR — Automated Testing Strategy
+# CCC Review — Automated Testing Strategy
 
 ## Goal
 
-CCCR must have a strong automated test suite.
+CCC Review must have a strong automated test suite.
 
 Automated tests are part of the implementation, not optional follow-up work.
 
@@ -71,7 +71,7 @@ Cover at least:
 - branch changes where relevant,
 - unusual filenames.
 
-Tests must prove that CCCR does not mutate Git state unexpectedly.
+Tests must prove that CCC Review does not mutate Git state unexpectedly.
 
 Never run these tests against the developer's active repository.
 
@@ -127,7 +127,7 @@ This requires an explicit regression test.
 
 ### 5. Workflow integration tests
 
-Test complete CCCR flows using as much production code as practical:
+Test complete CCC Review flows using as much production code as practical:
 
 - temporary Git repository,
 - fake host/hook harness,

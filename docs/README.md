@@ -1,10 +1,10 @@
-# CCCR — Development Guide
+# CCC Review — Development Guide
 
 ## Project
 
-**CCCR — Claude Code ↔ Codex Review**
+**CCC Review — Claude Code ↔ Codex Review**
 
-CCCR automates independent code review between Claude Code and Codex.
+CCC Review automates independent code review between Claude Code and Codex.
 
 The architecture should support both directions:
 

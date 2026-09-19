@@ -21,7 +21,7 @@ export type ClaudeEffort = (typeof CLAUDE_EFFORTS)[number];
 
 /**
  * File tools only. No Bash: even a `git diff` allow rule would permit
- * `git diff --output=<file>`, so CCCR collects the Git changes itself.
+ * `git diff --output=<file>`, so CCC Review collects the Git changes itself.
  */
 export const REVIEWER_TOOLS = "Read,Grep,Glob";
 
@@ -92,7 +92,7 @@ export class ClaudeReviewer implements Reviewer {
 			[
 				"-p",
 				// No CLAUDE.md, plugins, hooks, skills or MCP: a hermetic reviewer
-				// that cannot re-enter CCCR's own Claude Code hooks.
+				// that cannot re-enter CCC Review's own Claude Code hooks.
 				"--safe-mode",
 				"--no-session-persistence",
 				"--output-format",
@@ -127,8 +127,8 @@ export class ClaudeReviewer implements Reviewer {
 			cwd,
 			input,
 			timeoutMs,
-			missingHint: "install Claude Code or set CCCR_CLAUDE_BIN",
-			timeoutSetting: "CCCR_CLAUDE_TIMEOUT_MS",
+			missingHint: "install Claude Code or set CCC_REVIEW_CLAUDE_BIN",
+			timeoutSetting: "CCC_REVIEW_CLAUDE_TIMEOUT_MS",
 		});
 	}
 }

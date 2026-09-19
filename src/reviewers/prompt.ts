@@ -44,7 +44,7 @@ function lastChars(text: string): string {
 
 export interface PromptOptions {
 	/**
-	 * The Git changes, collected by CCCR, for a reviewer that cannot run
+	 * The Git changes, collected by CCC Review, for a reviewer that cannot run
 	 * commands. Absent: the reviewer inspects Git itself.
 	 */
 	changes?: string;
@@ -113,8 +113,7 @@ export function buildReviewPrompt(
 			"The writer was asked to fix valid findings and reject invalid ones with reasoning. Re-check each previous finding. Reuse the same ID for a finding that is still unresolved. Do not repeat findings the writer rejected with correct reasoning.",
 		);
 	}
-	const nextId =
-		Math.max(0, ...(previous?.findings ?? []).map((f) => idNumber(f.id))) + 1;
+	const nextId = request.nextFindingNumber;
 	lines.push(
 		"",
 		`Number new findings CCC-${String(nextId).padStart(3, "0")}, CCC-${String(nextId + 1).padStart(3, "0")}, …`,
@@ -131,9 +130,4 @@ export function buildReviewPrompt(
 	if (options.changes !== undefined)
 		lines.push("", "Git changes since activation:", options.changes);
 	return lines.join("\n");
-}
-
-function idNumber(id: string): number {
-	const m = /^CCC-(\d+)$/.exec(id);
-	return m ? Number(m[1]) : 0;
 }

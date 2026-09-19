@@ -294,7 +294,7 @@ describe("test isolation", () => {
 
 	it("ignores the developer's global excludes file", async () => {
 		const repo = await TemporaryGitRepository.create();
-		const xdg = await makeTempDir("cccr-xdg-");
+		const xdg = await makeTempDir("ccc-review-xdg-");
 		const saved = { xdg: process.env.XDG_CONFIG_HOME, home: process.env.HOME };
 		try {
 			await mkdir(join(xdg, "git"));

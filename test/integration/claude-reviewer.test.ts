@@ -43,6 +43,7 @@ describe("ClaudeReviewer", () => {
 			taskId: "t1",
 			round: 1,
 			baseline: await captureBaseline(repo.root),
+			nextFindingNumber: 1,
 			context: { task: "make a 2", report: "set a to 2" },
 		};
 		await repo.write("a.ts", "export const a = 2;\n");
@@ -150,6 +151,7 @@ describe("ClaudeReviewer", () => {
 
 	it("passes previous findings so IDs can be preserved", async () => {
 		request.previous = changesRequested(finding("CCC-004", "off by one"));
+		request.nextFindingNumber = 5;
 		await review({ output: approved() });
 		const { stdin } = await firstCall();
 		assert.match(stdin, /CCC-004 \[high\]: off by one/);
@@ -252,7 +254,7 @@ describe("ClaudeReviewer", () => {
 			const started = Date.now();
 			await assert.rejects(
 				review({ sleepMs: 30_000, output: approved() }, 1000),
-				/claude timed out after 1000 ms — raise CCCR_CLAUDE_TIMEOUT_MS/,
+				/claude timed out after 1000 ms — raise CCC_REVIEW_CLAUDE_TIMEOUT_MS/,
 			);
 			assert.ok(Date.now() - started < 10_000);
 		});
@@ -275,7 +277,7 @@ describe("ClaudeReviewer", () => {
 			});
 			await assert.rejects(
 				reviewer.review(request),
-				/claude executable not found: .*set CCCR_CLAUDE_BIN/,
+				/claude executable not found: .*set CCC_REVIEW_CLAUDE_BIN/,
 			);
 		});
 

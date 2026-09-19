@@ -43,6 +43,7 @@ describe("CodexReviewer", () => {
 			taskId: "t1",
 			round: 1,
 			baseline: await captureBaseline(repo.root),
+			nextFindingNumber: 1,
 			context: { task: "make a 2", report: "set a to 2" },
 		};
 	});
@@ -125,6 +126,7 @@ describe("CodexReviewer", () => {
 
 	it("passes previous findings so IDs can be preserved", async () => {
 		request.previous = changesRequested(finding("CCC-004", "off by one"));
+		request.nextFindingNumber = 5;
 		await review({ output: approved() });
 		const [call] = (await codex?.calls()) ?? [];
 		assert.match(call?.stdin ?? "", /CCC-004 \[high\]: off by one/);
@@ -312,7 +314,7 @@ describe("CodexReviewer", () => {
 		it("check() reports a missing binary and a missing login", async () => {
 			await assert.rejects(
 				new CodexReviewer({ bin: join(repo.root, "nope") }).check(),
-				/codex executable not found: .*nope — install the Codex CLI or set CCCR_CODEX_BIN/,
+				/codex executable not found: .*nope — install the Codex CLI or set CCC_REVIEW_CODEX_BIN/,
 			);
 			codex = await FakeCodex.create();
 			await new CodexReviewer({ bin: codex.bin }).check();
@@ -367,7 +369,7 @@ describe("CodexReviewer", () => {
 			);
 			await assert.rejects(
 				review({ sleepMs: 30_000 }, 500),
-				/timed out after 500 ms — raise CCCR_CODEX_TIMEOUT_MS/,
+				/timed out after 500 ms — raise CCC_REVIEW_CODEX_TIMEOUT_MS/,
 			);
 		});
 	});

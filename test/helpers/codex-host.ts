@@ -51,8 +51,11 @@ export class CodexHostHarness {
 		});
 	}
 
-	/** `$cccr <args>` typed by the user. */
-	command(args: string, mention = "$cccr"): Promise<HookOutput | undefined> {
+	/** `$ccc-review <args>` typed by the user. */
+	command(
+		args: string,
+		mention = "$ccc-review",
+	): Promise<HookOutput | undefined> {
 		return this.prompt(`${mention} ${args}`);
 	}
 

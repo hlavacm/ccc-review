@@ -50,7 +50,7 @@ $RECYCLE.BIN/
 node_modules/
 dist/
 coverage/
-.cccr/
+.ccc-review/
 .env
 .env.*
 .claude/settings.local.json

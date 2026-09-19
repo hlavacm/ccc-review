@@ -36,10 +36,10 @@ export class ClaudeHostHarness {
 		};
 	}
 
-	/** `/cccr:cccr <args>` typed by the user. */
+	/** `/ccc-review:ccc-review <args>` typed by the user. */
 	command(
 		args: string,
-		commandName = "cccr:cccr",
+		commandName = "ccc-review:ccc-review",
 	): Promise<HookOutput | undefined> {
 		return this.send("command", {
 			...this.common("UserPromptExpansion"),

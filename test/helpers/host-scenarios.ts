@@ -79,7 +79,7 @@ export function hostScenarios(d: Direction): void {
 		beforeEach(async () => {
 			repo = await TemporaryGitRepository.create();
 			await repo.commitFile("app.ts", "export const x = 1;\n");
-			stateDir = await makeTempDir("cccr-state-");
+			stateDir = await makeTempDir("ccc-review-state-");
 			await setup([]);
 		});
 		afterEach(async () => {
@@ -201,6 +201,25 @@ export function hostScenarios(d: Direction): void {
 			const state = await host.state();
 			assert.equal(state?.active, false);
 			assert.equal(state?.round, 3);
+		});
+
+		it("finding IDs are not reused within a task", async () => {
+			await setup([
+				changesRequested(
+					finding("CCC-001"),
+					finding("CCC-002"),
+					finding("CCC-003"),
+				),
+				changesRequested(finding("CCC-001")),
+				approved(),
+			]);
+			await host.command("on");
+			await host.stop("r1");
+			await host.stop("r2", true);
+			await host.stop("r3", true);
+			const third = (await env?.calls())?.[2]?.stdin ?? "";
+			assert.match(third, /Number new findings CCC-004, CCC-005/);
+			assert.equal((await host.state())?.lastFindingNumber, 3);
 		});
 
 		it("a configured max-round limit is honoured", async () => {

@@ -1,5 +1,5 @@
 {
-	"name": "cccr",
+	"name": "ccc-review",
 	"version": "1.0.0",
 	"private": true,
 	"license": "MIT",
@@ -8,7 +8,7 @@
 		"type": "git",
 		"url": "git+https://github.com/hlavacm/ccc-review.git"
 	},
-	"description": "CCCR — Claude Code ↔ Codex Review",
+	"description": "CCC Review — Claude Code ↔ Codex Review",
 	"type": "module",
 	"engines": {
 		"node": ">=22.18"
@@ -19,7 +19,7 @@
 		"test:unit": "node --import ./test/setup.ts --test \"test/unit/**/*.test.ts\"",
 		"test:integration": "node --import ./test/setup.ts --test \"test/integration/**/*.test.ts\"",
 		"test:coverage": "node --import ./test/setup.ts --test --experimental-test-coverage --test-coverage-exclude=\"test/**\" \"test/**/*.test.ts\"",
-		"test:smoke": "CCCR_SMOKE=1 node --import ./test/setup.ts --test --test-timeout=1500000 \"test/smoke/**/*.smoke.ts\"",
+		"test:smoke": "CCC_REVIEW_SMOKE=1 node --import ./test/setup.ts --test --test-timeout=1500000 \"test/smoke/**/*.smoke.ts\"",
 		"test:smoke:install": "node --import ./test/setup.ts --test --test-timeout=600000 test/smoke/install.smoke.ts",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check .",

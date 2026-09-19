@@ -49,7 +49,7 @@ describe("package contents", () => {
 			/^node_modules\//,
 			/^dist\//,
 			/^coverage\//,
-			/(^|\/)\.cccr\//,
+			/(^|\/)\.ccc-review\//,
 			/(^|\/)\.env($|\.)/,
 			/\.(pem|key|p12|pfx)$/,
 			/^\.claude\/settings\.local\.json$/,
@@ -168,11 +168,13 @@ describe("README", () => {
 			assert.ok(scripts.includes(script), `pnpm ${script}`);
 	});
 
-	it("documents every CCCR_* setting the code reads", () => {
+	it("documents every CCC_REVIEW_* setting the code reads", () => {
 		const settings = new Set(
 			sourceFiles("src").flatMap((f) =>
 				[
-					...readFileSync(join(repoRoot, f), "utf8").matchAll(/CCCR_[A-Z_]+/g),
+					...readFileSync(join(repoRoot, f), "utf8").matchAll(
+						/CCC_REVIEW_[A-Z_]+/g,
+					),
 				].map((m) => m[0]),
 			),
 		);
@@ -181,7 +183,7 @@ describe("README", () => {
 			assert.ok(readme.includes(`\`${name}\``), name);
 	});
 
-	// Regression: the README said `codex plugin add cccr`, which Codex rejects
+	// Regression: the README said `codex plugin add ccc-review`, which Codex rejects
 	// ("plugin requires --marketplace unless passed as <plugin>@<marketplace>").
 	it("install commands name the plugin and marketplace from the manifests", () => {
 		const id = `${readJson(".claude-plugin/plugin.json").name}@${readJson(".claude-plugin/marketplace.json").name}`;
@@ -207,10 +209,10 @@ describe("installed plugin from a clean copy", () => {
 	let repo: TemporaryGitRepository;
 
 	before(async () => {
-		pkg = await makeTempDir("cccr-pkg-");
+		pkg = await makeTempDir("ccc-review-pkg-");
 		copyPackage(repoRoot, pkg);
 		assert.equal(existsSync(join(pkg, "node_modules")), false);
-		stateDir = await makeTempDir("cccr-state-");
+		stateDir = await makeTempDir("ccc-review-state-");
 		repo = await TemporaryGitRepository.create();
 		await repo.commitFile("app.ts", "export const x = 1;\n");
 	});
@@ -222,13 +224,13 @@ describe("installed plugin from a clean copy", () => {
 
 	const claudeRound = (session: string, codex: FakeCodex) =>
 		completeArmedTurn("claude", pkg, repo, session, {
-			CCCR_STATE_DIR: stateDir,
-			CCCR_CODEX_BIN: codex.bin,
+			CCC_REVIEW_STATE_DIR: stateDir,
+			CCC_REVIEW_CODEX_BIN: codex.bin,
 		});
 	const codexRound = (session: string, claude: FakeClaude) =>
 		completeArmedTurn("codex", pkg, repo, session, {
 			PLUGIN_DATA: stateDir,
-			CCCR_CLAUDE_BIN: claude.bin,
+			CCC_REVIEW_CLAUDE_BIN: claude.bin,
 		});
 
 	const task = async (session: string) => {

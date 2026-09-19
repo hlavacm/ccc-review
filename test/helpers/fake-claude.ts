@@ -10,7 +10,7 @@ export type { FakeClaudeLogin, FakeClaudeStep };
 export class FakeClaude extends FakeCli<FakeClaudeStep> {
 	static async create(...steps: FakeClaudeStep[]): Promise<FakeClaude> {
 		const fake = new FakeClaude(
-			await FakeCli.tempDir("cccr-fake-claude-"),
+			await FakeCli.tempDir("ccc-review-fake-claude-"),
 			"claude",
 		);
 		return FakeCli.setup(fake, "fake-claude.ts", steps);

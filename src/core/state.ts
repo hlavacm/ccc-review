@@ -31,6 +31,8 @@ export interface TaskState {
 	round: number;
 	maxRounds: number;
 	lastResult?: ReviewResult;
+	/** Highest `CCC-###` number any round of this task has used. */
+	lastFindingNumber?: number;
 	/** Last reviewer infrastructure/validation failure. */
 	lastError?: string;
 }
@@ -131,6 +133,14 @@ function parseTaskState(data: unknown, taskId: string): TaskState {
 	if (!isBaseline(s.baseline)) throw new Error("invalid baseline");
 	if (s.lastError !== undefined && typeof s.lastError !== "string")
 		throw new Error("invalid lastError");
+	if (
+		s.lastFindingNumber !== undefined &&
+		!(
+			Number.isInteger(s.lastFindingNumber) &&
+			(s.lastFindingNumber as number) >= 0
+		)
+	)
+		throw new Error("invalid lastFindingNumber");
 
 	const state: TaskState = {
 		version: STATE_VERSION,
@@ -145,6 +155,8 @@ function parseTaskState(data: unknown, taskId: string): TaskState {
 	if (s.lastResult !== undefined)
 		state.lastResult = parseReviewResult(s.lastResult);
 	if (s.lastError !== undefined) state.lastError = s.lastError;
+	if (s.lastFindingNumber !== undefined)
+		state.lastFindingNumber = s.lastFindingNumber as number;
 	return state;
 }
 

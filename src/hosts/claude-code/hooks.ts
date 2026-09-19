@@ -35,30 +35,42 @@ export interface HookInput {
 }
 
 export function configFromEnv(env: NodeJS.ProcessEnv): HostConfig {
-	const effort = oneOf(env, "CCCR_CODEX_REASONING_EFFORT", REASONING_EFFORTS);
+	const effort = oneOf(
+		env,
+		"CCC_REVIEW_CODEX_REASONING_EFFORT",
+		REASONING_EFFORTS,
+	);
 	const config: HostConfig = {
 		stateDir:
-			env.CCCR_STATE_DIR || env.CLAUDE_PLUGIN_DATA || join(homedir(), ".cccr"),
+			env.CCC_REVIEW_STATE_DIR ||
+			env.CLAUDE_PLUGIN_DATA ||
+			join(homedir(), ".ccc-review"),
 		reviewer: new CodexReviewer({
-			bin: env.CCCR_CODEX_BIN || "codex",
+			bin: env.CCC_REVIEW_CODEX_BIN || "codex",
 			timeoutMs:
-				positiveInt(env, "CCCR_CODEX_TIMEOUT_MS") ?? DEFAULT_CODEX_TIMEOUT_MS,
-			...(env.CCCR_CODEX_MODEL ? { model: env.CCCR_CODEX_MODEL } : {}),
+				positiveInt(env, "CCC_REVIEW_CODEX_TIMEOUT_MS") ??
+				DEFAULT_CODEX_TIMEOUT_MS,
+			...(env.CCC_REVIEW_CODEX_MODEL
+				? { model: env.CCC_REVIEW_CODEX_MODEL }
+				: {}),
 			...(effort ? { reasoningEffort: effort } : {}),
 			env,
 		}),
 	};
-	const maxRounds = positiveInt(env, "CCCR_MAX_ROUNDS");
+	const maxRounds = positiveInt(env, "CCC_REVIEW_MAX_ROUNDS");
 	if (maxRounds !== undefined) config.maxRounds = maxRounds;
 	return config;
 }
 
-/** UserPromptExpansion: `/cccr:cccr on [task] | off | status`. */
+/** UserPromptExpansion: `/ccc-review:ccc-review on [task] | off | status`. */
 export async function handleCommand(
 	c: HostConfig,
 	input: HookInput,
 ): Promise<HookOutput | undefined> {
-	if (input.command_name !== "cccr" && input.command_name !== "cccr:cccr")
+	if (
+		input.command_name !== "ccc-review" &&
+		input.command_name !== "ccc-review:ccc-review"
+	)
 		return undefined;
 	const args =
 		typeof input.command_args === "string" ? input.command_args.trim() : "";
@@ -120,7 +132,7 @@ export async function runHook(
 		return await handler(getConfig(), input as HookInput);
 	} catch (error) {
 		const message = `CCC Review error: ${(error as Error).message}`;
-		// A failed /cccr command must not fall through to the model.
+		// A failed /ccc-review command must not fall through to the model.
 		return event === "command"
 			? { decision: "block", reason: message }
 			: { systemMessage: message };

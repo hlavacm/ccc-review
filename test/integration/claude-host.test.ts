@@ -43,7 +43,7 @@ describe("Claude Code host", () => {
 	beforeEach(async () => {
 		repo = await TemporaryGitRepository.create();
 		await repo.commitFile("app.ts", "export const x = 1;\n");
-		stateDir = await makeTempDir("cccr-state-");
+		stateDir = await makeTempDir("ccc-review-state-");
 		codex = await FakeCodex.create();
 		await setup([]);
 	});
@@ -116,12 +116,12 @@ describe("Claude Code host", () => {
 		});
 
 		it("accepts the bare command name too", async () => {
-			await host.command("on", "cccr");
+			await host.command("on", "ccc-review");
 			assert.equal((await host.state())?.active, true);
 		});
 
 		it("outside a Git repository nothing is enabled", async () => {
-			const notRepo = await makeTempDir("cccr-norepo-");
+			const notRepo = await makeTempDir("ccc-review-norepo-");
 			try {
 				const h = new ClaudeHostHarness(host.config, notRepo);
 				const out = await h.command("on");
@@ -241,7 +241,7 @@ describe("Claude Code host", () => {
 		it("slash commands are not recorded as the task", async () => {
 			await setup([{ output: approved() }]);
 			await host.command("on");
-			await host.prompt("/cccr:cccr status");
+			await host.prompt("/ccc-review:ccc-review status");
 			await host.stop("done");
 			assert.doesNotMatch(
 				(await codex.calls())[0]?.stdin ?? "",
@@ -423,20 +423,20 @@ describe("Claude Code host", () => {
 	describe("configuration", () => {
 		it("reads state dir, codex binary and timeout from the environment", () => {
 			const c = configFromEnv({
-				CCCR_STATE_DIR: "/s",
+				CCC_REVIEW_STATE_DIR: "/s",
 				CLAUDE_PLUGIN_DATA: "/p",
 			});
 			assert.equal(c.stateDir, "/s");
 			assert.equal(configFromEnv({ CLAUDE_PLUGIN_DATA: "/p" }).stateDir, "/p");
-			assert.ok(configFromEnv({ CCCR_CODEX_TIMEOUT_MS: "5" }));
+			assert.ok(configFromEnv({ CCC_REVIEW_CODEX_TIMEOUT_MS: "5" }));
 		});
 
 		it("reads max rounds, model and reasoning effort", () => {
 			const c = configFromEnv({
-				CCCR_MAX_ROUNDS: "5",
-				CCCR_CODEX_MODEL: "gpt-x",
-				CCCR_CODEX_REASONING_EFFORT: "high",
-				CCCR_CODEX_TIMEOUT_MS: "120000",
+				CCC_REVIEW_MAX_ROUNDS: "5",
+				CCC_REVIEW_CODEX_MODEL: "gpt-x",
+				CCC_REVIEW_CODEX_REASONING_EFFORT: "high",
+				CCC_REVIEW_CODEX_TIMEOUT_MS: "120000",
 			});
 			assert.equal(c.maxRounds, 5);
 			assert.equal(
@@ -452,13 +452,13 @@ describe("Claude Code host", () => {
 		});
 
 		const invalid: [string, string, RegExp][] = [
-			["CCCR_MAX_ROUNDS", "0", /invalid CCCR_MAX_ROUNDS/],
-			["CCCR_MAX_ROUNDS", "two", /invalid CCCR_MAX_ROUNDS/],
-			["CCCR_MAX_ROUNDS", " ", /invalid CCCR_MAX_ROUNDS/],
+			["CCC_REVIEW_MAX_ROUNDS", "0", /invalid CCC_REVIEW_MAX_ROUNDS/],
+			["CCC_REVIEW_MAX_ROUNDS", "two", /invalid CCC_REVIEW_MAX_ROUNDS/],
+			["CCC_REVIEW_MAX_ROUNDS", " ", /invalid CCC_REVIEW_MAX_ROUNDS/],
 			[
-				"CCCR_CODEX_REASONING_EFFORT",
+				"CCC_REVIEW_CODEX_REASONING_EFFORT",
 				"extreme",
-				/invalid CCCR_CODEX_REASONING_EFFORT "extreme": expected one of minimal, low, medium, high, xhigh/,
+				/invalid CCC_REVIEW_CODEX_REASONING_EFFORT "extreme": expected one of minimal, low, medium, high, xhigh/,
 			],
 		];
 		for (const [name, value, error] of invalid)
@@ -472,15 +472,18 @@ describe("Claude Code host", () => {
 			});
 
 		for (const bad of ["0", "-1", "1.5", "abc", ""])
-			it(`rejects CCCR_CODEX_TIMEOUT_MS=${JSON.stringify(bad)}`, async () => {
+			it(`rejects CCC_REVIEW_CODEX_TIMEOUT_MS=${JSON.stringify(bad)}`, async () => {
 				assert.throws(
-					() => configFromEnv({ CCCR_CODEX_TIMEOUT_MS: bad }),
-					/invalid CCCR_CODEX_TIMEOUT_MS/,
+					() => configFromEnv({ CCC_REVIEW_CODEX_TIMEOUT_MS: bad }),
+					/invalid CCC_REVIEW_CODEX_TIMEOUT_MS/,
 				);
 				const out = await runHook("stop", "{}", () =>
-					configFromEnv({ CCCR_CODEX_TIMEOUT_MS: bad }),
+					configFromEnv({ CCC_REVIEW_CODEX_TIMEOUT_MS: bad }),
 				);
-				assert.match(out?.systemMessage ?? "", /invalid CCCR_CODEX_TIMEOUT_MS/);
+				assert.match(
+					out?.systemMessage ?? "",
+					/invalid CCC_REVIEW_CODEX_TIMEOUT_MS/,
+				);
 			});
 	});
 
@@ -497,7 +500,7 @@ describe("Claude Code host", () => {
 			assert.equal(out?.decision, "block");
 			assert.match(
 				out?.reason ?? "",
-				/not enabled: codex executable not found: .*CCCR_CODEX_BIN/,
+				/not enabled: codex executable not found: .*CCC_REVIEW_CODEX_BIN/,
 			);
 			assert.equal(await h.taskId(), undefined);
 		});
@@ -674,7 +677,7 @@ describe("Claude Code host", () => {
 	});
 
 	describe("configured max rounds", () => {
-		it("CCCR_MAX_ROUNDS limits the loop", async () => {
+		it("CCC_REVIEW_MAX_ROUNDS limits the loop", async () => {
 			await setup(
 				[{ output: changesRequested() }, { output: approved() }],
 				10_000,

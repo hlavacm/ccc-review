@@ -11,7 +11,7 @@ process.env.GIT_CONFIG_VALUE_0 = "/dev/null";
 // A developer's CODEX_API_KEY / ANTHROPIC_API_KEY switches the reviewer login
 // preflight off; the deterministic suite must not depend on it. Smoke tests
 // use the real keys.
-if (process.env.CCCR_SMOKE !== "1") {
+if (process.env.CCC_REVIEW_SMOKE !== "1") {
 	delete process.env.CODEX_API_KEY;
 	delete process.env.ANTHROPIC_API_KEY;
 }

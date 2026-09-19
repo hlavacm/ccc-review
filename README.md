@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/icon/512x512.png" alt="CCCR logo: Claude Code and Codex reviewing each other" width="220">
+<img src="assets/icon/512x512.png" alt="CCC Review logo: Claude Code and Codex reviewing each other" width="220">
 
 # CCC Review
 
@@ -30,7 +30,7 @@ or Codex to implement and Claude Code to review.
 
 A second, independent model catches the bugs the first one talked itself
 past. Doing that by hand means copying the task, the diff and the writer's
-report to the other agent and pasting its findings back. **CCCR automates
+report to the other agent and pasting its findings back. **CCC Review automates
 that loop inside the agent you already use**: when the writer finishes a
 turn, the other agent reviews the real repository changes, and its findings
 go back to the writer until the reviewer approves or a bounded stop
@@ -58,10 +58,10 @@ condition is reached.
 
    ```sh
    claude plugin marketplace add hlavacm/ccc-review
-   claude plugin install cccr@cccr-local
+   claude plugin install ccc-review@hlavacm
    ```
 
-2. Turn review on: `/cccr:cccr on Add multiply(a, b) to math.js with a test`.
+2. Turn review on: `/ccc-review:ccc-review on Add multiply(a, b) to math.js with a test`.
    This only arms review and records the task for the reviewer; Claude does
    not start working.
 3. Ask Claude for the work in a normal message, for example
@@ -70,14 +70,14 @@ condition is reached.
 
 **Codex writes, Claude Code reviews**
 
-1. Install the plugin, start Codex and approve the CCCR hooks in `/hooks`:
+1. Install the plugin, start Codex and approve the CCC Review hooks in `/hooks`:
 
    ```sh
    codex plugin marketplace add hlavacm/ccc-review
-   codex plugin add cccr@cccr-local
+   codex plugin add ccc-review@hlavacm
    ```
 
-2. Turn review on: `$cccr on Fix add() in math.js and add a test`. This only
+2. Turn review on: `$ccc-review on Fix add() in math.js and add a test`. This only
    arms review and records the task for the reviewer; Codex does not start
    working.
 3. Ask Codex for the work in a normal message, for example
@@ -103,7 +103,7 @@ flowchart LR
 | --- | --- | --- |
 | **Writer** (you work with it) | Claude Code | Codex |
 | **Reviewer** (headless, read-only) | `codex exec --sandbox read-only` | `claude -p --tools Read,Grep,Glob` |
-| **Command** | `/cccr:cccr on\|off\|status` | `$cccr on\|off\|status` |
+| **Command** | `/ccc-review:ccc-review on\|off\|status` | `$ccc-review on\|off\|status` |
 | **Trigger** | Claude Code `Stop` hook | Codex `Stop` hook |
 
 - **Writer**: plans, implements, and evaluates each finding: it fixes valid
@@ -111,7 +111,7 @@ flowchart LR
 - **Reviewer**: returns a structured verdict (`APPROVED`,
   `CHANGES_REQUESTED` or `NEEDS_HUMAN`) plus findings with stable IDs
   (`CCC-001`, `CCC-002`, …) that stay the same across rounds.
-- **Git is the source of truth**: at `on`, CCCR records the repository root,
+- **Git is the source of truth**: at `on`, CCC Review records the repository root,
   `HEAD`, branch and `git status`. The reviewer sees everything since that
   `HEAD`, commits included, and is told that files dirty before `on` may not
   be the writer's.
@@ -136,41 +136,41 @@ Tested with Claude Code 2.1.278, codex-cli 0.155.1 and Node.js 22.18–26.
 ## Install
 
 The repository is both a Claude Code plugin (`.claude-plugin/`) and a Codex
-plugin (`.codex-plugin/`), and it ships a marketplace named `cccr-local` that
+plugin (`.codex-plugin/`), and it ships a marketplace named `hlavacm` that
 both CLIs read.
 
 ### Claude Code (Claude writes, Codex reviews)
 
 ```sh
 claude plugin marketplace add hlavacm/ccc-review
-claude plugin install cccr@cccr-local
+claude plugin install ccc-review@hlavacm
 ```
 
 Restart Claude Code. Inside Claude Code, `/plugin marketplace add …` and
-`/plugin install cccr@cccr-local` work too. To try it for one session without
+`/plugin install ccc-review@hlavacm` work too. To try it for one session without
 installing, clone the repository and run `claude --plugin-dir <clone>`.
 
 ### Codex (Codex writes, Claude Code reviews)
 
 ```sh
 codex plugin marketplace add hlavacm/ccc-review
-codex plugin add cccr@cccr-local
+codex plugin add ccc-review@hlavacm
 ```
 
 Codex runs plugin hooks only after you trust them: start Codex, open `/hooks`
-and approve the CCCR `UserPromptSubmit` and `Stop` hooks. Do it again after
+and approve the CCC Review `UserPromptSubmit` and `Stop` hooks. Do it again after
 every update that changes them.
 
 <details>
 <summary><b>Install from a local clone instead</b></summary>
 
 ```sh
-git clone https://github.com/hlavacm/ccc-review ~/.local/share/cccr
-claude plugin marketplace add ~/.local/share/cccr
-codex plugin marketplace add ~/.local/share/cccr
+git clone https://github.com/hlavacm/ccc-review ~/.local/share/ccc-review
+claude plugin marketplace add ~/.local/share/ccc-review
+codex plugin marketplace add ~/.local/share/ccc-review
 ```
 
-Then install `cccr@cccr-local` as above. A local-path marketplace installs a
+Then install `ccc-review@hlavacm` as above. A local-path marketplace installs a
 copy of the whole directory, untracked files included, so use a clean clone,
 not a development checkout with `node_modules/` or `dist/`.
 
@@ -180,16 +180,16 @@ not a development checkout with `node_modules/` or `dist/`.
 
 ### Claude → Codex
 
-Claude Code namespaces plugin commands, so the command is `/cccr:cccr`:
+Claude Code namespaces plugin commands, so the command is `/ccc-review:ccc-review`:
 
 ```text
-/cccr:cccr on [task description]   # check Codex, record Git baseline, arm review (does not start Claude)
-/cccr:cccr status                  # state, round n/3, reviewer settings, history, file paths
-/cccr:cccr off                     # disarm (also stops further rounds of this task)
+/ccc-review:ccc-review on [task description]   # check Codex, record Git baseline, arm review (does not start Claude)
+/ccc-review:ccc-review status                  # state, round n/3, reviewer settings, history, file paths
+/ccc-review:ccc-review off                     # disarm (also stops further rounds of this task)
 ```
 
 ```text
-> /cccr:cccr on Add multiply(a, b) to math.js with a test
+> /ccc-review:ccc-review on Add multiply(a, b) to math.js with a test
 CCC Review: enabled. Codex will review when Claude finishes.
 
 > Add multiply(a, b) to math.js with a test.
@@ -201,24 +201,24 @@ Findings:
 CCC Review: Codex APPROVED (round 2/3). multiply is correct and tested.
 ```
 
-To abort a running review, interrupt Claude (Esc). CCCR kills the whole Codex
+To abort a running review, interrupt Claude (Esc). CCC Review kills the whole Codex
 process group, records the round as `reviewer_error` (not approved) and stops
-the task. `/cccr:cccr on` starts a fresh one.
+the task. `/ccc-review:ccc-review on` starts a fresh one.
 
 ### Codex → Claude
 
-Codex has no plugin slash commands, so the command is the `$cccr` skill
+Codex has no plugin slash commands, so the command is the `$ccc-review` skill
 mention. The `UserPromptSubmit` hook handles it and blocks it, so it never
-reaches the model. `$cccr:cccr …` works too.
+reaches the model. `$ccc-review:ccc-review …` works too.
 
 ```text
-$cccr on [task description]   # check Claude, record Git baseline, arm review (does not start Codex)
-$cccr status                  # state, round n/3, reviewer settings, history
-$cccr off                     # disarm
+$ccc-review on [task description]   # check Claude, record Git baseline, arm review (does not start Codex)
+$ccc-review status                  # state, round n/3, reviewer settings, history
+$ccc-review off                     # disarm
 ```
 
 ```text
-> $cccr on Fix add() in math.js and add a node:test test
+> $ccc-review on Fix add() in math.js and add a node:test test
 CCC Review: enabled. Claude will review when Codex finishes.
 
 > Fix add() in math.js and add a node:test test.
@@ -232,7 +232,7 @@ CCC Review: Claude APPROVED (round 2/3).
 
 - Every writer completion while review is on runs exactly one round. A
   duplicate or concurrent completion event never starts a second one.
-- After round 3 (`CCCR_MAX_ROUNDS`) without approval, review stops and you get
+- After round 3 (`CCC_REVIEW_MAX_ROUNDS`) without approval, review stops and you get
   the last findings. The writer is not blocked again.
 - A missing reviewer binary, failed login, non-zero exit, timeout, invalid
   JSON or an invalid review is an error: the round is recorded as
@@ -249,19 +249,19 @@ never approve.
 
 | Variable | Default | Direction |
 | --- | --- | --- |
-| `CCCR_MAX_ROUNDS` | `3` (read at `on`) | both |
-| `CCCR_STATE_DIR` | Claude Code: `${CLAUDE_PLUGIN_DATA}`, Codex: `${PLUGIN_DATA}`, else `~/.cccr` | both |
-| `CCCR_CODEX_BIN` | `codex` | Claude → Codex |
-| `CCCR_CODEX_TIMEOUT_MS` | `1200000` (20 min; the Stop hook allows 30) | Claude → Codex |
-| `CCCR_CODEX_MODEL` | Codex's configured model (`-m`) | Claude → Codex |
-| `CCCR_CODEX_REASONING_EFFORT` | Codex's configured effort; `minimal`, `low`, `medium`, `high`, `xhigh` | Claude → Codex |
-| `CCCR_CLAUDE_BIN` | `claude` | Codex → Claude |
-| `CCCR_CLAUDE_TIMEOUT_MS` | `1200000` (20 min; the Stop hook allows 30) | Codex → Claude |
-| `CCCR_CLAUDE_MODEL` | Claude Code's configured model (`--model`) | Codex → Claude |
-| `CCCR_CLAUDE_EFFORT` | Claude Code's default; `low`, `medium`, `high`, `xhigh`, `max` | Codex → Claude |
+| `CCC_REVIEW_MAX_ROUNDS` | `3` (read at `on`) | both |
+| `CCC_REVIEW_STATE_DIR` | Claude Code: `${CLAUDE_PLUGIN_DATA}`, Codex: `${PLUGIN_DATA}`, else `~/.ccc-review` | both |
+| `CCC_REVIEW_CODEX_BIN` | `codex` | Claude → Codex |
+| `CCC_REVIEW_CODEX_TIMEOUT_MS` | `1200000` (20 min; the Stop hook allows 30) | Claude → Codex |
+| `CCC_REVIEW_CODEX_MODEL` | Codex's configured model (`-m`) | Claude → Codex |
+| `CCC_REVIEW_CODEX_REASONING_EFFORT` | Codex's configured effort; `minimal`, `low`, `medium`, `high`, `xhigh` | Claude → Codex |
+| `CCC_REVIEW_CLAUDE_BIN` | `claude` | Codex → Claude |
+| `CCC_REVIEW_CLAUDE_TIMEOUT_MS` | `1200000` (20 min; the Stop hook allows 30) | Codex → Claude |
+| `CCC_REVIEW_CLAUDE_MODEL` | Claude Code's configured model (`--model`) | Codex → Claude |
+| `CCC_REVIEW_CLAUDE_EFFORT` | Claude Code's default; `low`, `medium`, `high`, `xhigh`, `max` | Codex → Claude |
 
 ```json
-{ "env": { "CCCR_MAX_ROUNDS": "2", "CCCR_CODEX_REASONING_EFFORT": "high" } }
+{ "env": { "CCC_REVIEW_MAX_ROUNDS": "2", "CCC_REVIEW_CODEX_REASONING_EFFORT": "high" } }
 ```
 
 <details>
@@ -291,7 +291,7 @@ claude -p --safe-mode --no-session-persistence --output-format json --json-schem
 ```
 
 `--safe-mode` loads no CLAUDE.md, plugins, hooks or MCP servers, so the
-nested Claude cannot re-enter CCCR's own hooks. Claude has no shell, so CCCR
+nested Claude cannot re-enter CCC Review's own hooks. Claude has no shell, so CCC Review
 collects the Git changes itself (read-only `git log`, the changed-file list,
 `git diff --no-ext-diff --no-textconv` and untracked files) and puts them in
 the prompt.
@@ -305,7 +305,7 @@ What the reviewer receives, and therefore what is sent to its model provider
 
 - **the original task**: the text after `on` and your prompts while review is
   on (last 12 000 characters);
-- **the implementation plan**: neither host makes it available to CCCR, so it
+- **the implementation plan**: neither host makes it available to CCC Review, so it
   is not sent;
 - **the writer's implementation report**: its final message (last 12 000
   characters);
@@ -322,11 +322,11 @@ Guarantees:
 - The reviewer is read-only for source code: Codex runs in
   `--sandbox read-only` with `approval_policy="never"`, and Claude has no
   shell, no edit tools and no plugins, hooks or MCP servers.
-- CCCR does not commit, stash, reset, check out, rebase or push.
+- CCC Review does not commit, stash, reset, check out, rebase or push.
 - Processes are spawned as executable + argument list, never via a shell
   string, and prompts go on stdin.
 - A reviewer failure is never approval.
-- State stays outside the repository (see `CCCR_STATE_DIR`). Nothing is sent
+- State stays outside the repository (see `CCC_REVIEW_STATE_DIR`). Nothing is sent
   anywhere except to the reviewer CLI you configured.
 
 ## Upgrade
@@ -335,8 +335,8 @@ Guarantees:
 when a new version is released:
 
 ```sh
-claude plugin marketplace update cccr-local
-claude plugin update cccr@cccr-local
+claude plugin marketplace update hlavacm
+claude plugin update ccc-review@hlavacm
 ```
 
 Restart Claude Code afterwards. To pick up changes without a version bump
@@ -345,8 +345,8 @@ Restart Claude Code afterwards. To pick up changes without a version bump
 **Codex** copies the plugin again on every `add`:
 
 ```sh
-codex plugin marketplace upgrade cccr-local
-codex plugin add cccr@cccr-local
+codex plugin marketplace upgrade hlavacm
+codex plugin add ccc-review@hlavacm
 ```
 
 For a local clone, `git pull` first and skip `marketplace upgrade`. Then
@@ -354,30 +354,30 @@ review the changed hooks again in `/hooks`.
 
 ## Uninstall
 
-First run `/cccr:cccr off` or `$cccr off` in active sessions, and note the
+First run `/ccc-review:ccc-review off` or `$ccc-review off` in active sessions, and note the
 state location that `status` prints.
 
 ```sh
-claude plugin uninstall cccr@cccr-local
-claude plugin marketplace remove cccr-local
-codex plugin remove cccr@cccr-local
-codex plugin marketplace remove cccr-local
+claude plugin uninstall ccc-review@hlavacm
+claude plugin marketplace remove hlavacm
+codex plugin remove ccc-review@hlavacm
+codex plugin marketplace remove hlavacm
 ```
 
-Then delete the state directory that `status` showed (`~/.cccr` or the plugin
-data directory, unless you set `CCCR_STATE_DIR`).
+Then delete the state directory that `status` showed (`~/.ccc-review` or the plugin
+data directory, unless you set `CCC_REVIEW_STATE_DIR`).
 
 <details>
 <summary><b>Troubleshooting</b></summary>
 
 | Message | Fix |
 | --- | --- |
-| `codex executable not found: codex — install the Codex CLI or set CCCR_CODEX_BIN` | install Codex or point `CCCR_CODEX_BIN` at it (same for `claude` / `CCCR_CLAUDE_BIN`) |
+| `codex executable not found: codex — install the Codex CLI or set CCC_REVIEW_CODEX_BIN` | install Codex or point `CCC_REVIEW_CODEX_BIN` at it (same for `claude` / `CCC_REVIEW_CLAUDE_BIN`) |
 | `Codex is not logged in — run \`codex login\`` | `codex login` or `CODEX_API_KEY`; for Claude, `claude auth login` or `ANTHROPIC_API_KEY` |
-| `… timed out after 20 min — raise CCCR_CODEX_TIMEOUT_MS …` | raise the timeout, but keep it under the Stop hook's 30 min |
+| `… timed out after 20 min — raise CCC_REVIEW_CODEX_TIMEOUT_MS …` | raise the timeout, but keep it under the Stop hook's 30 min |
 | `… returned invalid JSON: …` / `an invalid review: …` | usually transient; the excerpt shows what the reviewer produced |
 | `… exited with code N: <last stderr lines>` | read the stderr lines; auth errors add the login hint |
-| `$cccr on` does nothing in Codex | the hooks are not trusted yet: open `/hooks` |
+| `$ccc-review on` does nothing in Codex | the hooks are not trusted yet: open `/hooks` |
 
 </details>
 
@@ -391,13 +391,12 @@ data directory, unless you set `CCCR_STATE_DIR`).
 - Files dirty before `on` are listed for the reviewer but not attributed line
   by line.
 - Claude Code does not document the exact `command_name` of a plugin skill,
-  so both `cccr` and `cccr:cccr` are accepted.
+  so both `ccc-review` and `ccc-review:ccc-review` are accepted.
 - Codex does not document whether the TUI delivers a skill mention as the
-  literal `$cccr`. If the hook does not handle it, the `cccr` skill tells you
+  literal `$ccc-review`. If the hook does not handle it, the `ccc-review` skill tells you
   that review was NOT enabled.
 - The interactive TUIs are covered by hook-level tests and smoke tests, not by
   an automated TUI session.
-- The hook messages still say `CCC Review`.
 
 ## Testing
 

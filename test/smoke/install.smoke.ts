@@ -27,7 +27,7 @@ describe("install, upgrade and uninstall with the real CLIs (smoke)", {
 	let source: string;
 	let env: NodeJS.ProcessEnv;
 	let repo: TemporaryGitRepository;
-	const id = "cccr@cccr-local";
+	const id = "ccc-review@hlavacm";
 	const version = JSON.parse(
 		readFileSync(join(repoRoot, "package.json"), "utf8"),
 	).version as string;
@@ -43,9 +43,9 @@ describe("install, upgrade and uninstall with the real CLIs (smoke)", {
 	};
 
 	before(async () => {
-		tmp = await makeTempDir("cccr-install-");
+		tmp = await makeTempDir("ccc-review-install-");
 		// A clean clone of the current package (including uncommitted work).
-		source = join(tmp, "cccr");
+		source = join(tmp, "ccc-review");
 		copyPackage(repoRoot, source);
 		execFileSync("git", ["init", "-q"], { cwd: source });
 		commit("package");
@@ -77,20 +77,20 @@ describe("install, upgrade and uninstall with the real CLIs (smoke)", {
 	it("Claude Code: install, run the installed hooks, upgrade, uninstall", async () => {
 		const installed = join(
 			String(env.CLAUDE_CONFIG_DIR),
-			"plugins/cache/cccr-local/cccr",
+			"plugins/cache/hlavacm/ccc-review",
 			version,
 		);
 		cli("claude", "plugin", "marketplace", "add", source);
 		cli("claude", "plugin", "install", id);
-		assert.match(cli("claude", "plugin", "list"), /cccr@cccr-local/);
+		assert.match(cli("claude", "plugin", "list"), /ccc-review@hlavacm/);
 		assert.ok(existsSync(join(installed, "hooks/hooks.json")), installed);
 		assert.equal(existsSync(join(installed, "node_modules")), false);
 
 		const codex = await FakeCodex.create({ output: approved() });
 		try {
 			const out = await completeArmedTurn("claude", installed, repo, "cc", {
-				CCCR_STATE_DIR: join(tmp, "state"),
-				CCCR_CODEX_BIN: codex.bin,
+				CCC_REVIEW_STATE_DIR: join(tmp, "state"),
+				CCC_REVIEW_CODEX_BIN: codex.bin,
 			});
 			assert.match(String(out?.systemMessage), /Codex APPROVED/);
 		} finally {
@@ -100,7 +100,7 @@ describe("install, upgrade and uninstall with the real CLIs (smoke)", {
 		// Same version: `update` keeps the cached copy; reinstall picks it up.
 		writeFileSync(join(source, "UPGRADE_MARK"), "1\n");
 		commit("upgrade");
-		cli("claude", "plugin", "marketplace", "update", "cccr-local");
+		cli("claude", "plugin", "marketplace", "update", "hlavacm");
 		cli("claude", "plugin", "update", id);
 		assert.equal(existsSync(join(installed, "UPGRADE_MARK")), false);
 		cli("claude", "plugin", "uninstall", id);
@@ -118,7 +118,7 @@ describe("install, upgrade and uninstall with the real CLIs (smoke)", {
 		);
 		writeFileSync(join(source, "UPGRADE_MARK_2"), "1\n");
 		commit("release 99.0.0");
-		cli("claude", "plugin", "marketplace", "update", "cccr-local");
+		cli("claude", "plugin", "marketplace", "update", "hlavacm");
 		cli("claude", "plugin", "update", id);
 		const upgraded = join(installed, "..", "99.0.0");
 		assert.ok(existsSync(join(upgraded, "UPGRADE_MARK_2")), upgraded);
@@ -126,8 +126,8 @@ describe("install, upgrade and uninstall with the real CLIs (smoke)", {
 		const codex2 = await FakeCodex.create({ output: approved() });
 		try {
 			const out = await completeArmedTurn("claude", upgraded, repo, "cc2", {
-				CCCR_STATE_DIR: join(tmp, "state"),
-				CCCR_CODEX_BIN: codex2.bin,
+				CCC_REVIEW_STATE_DIR: join(tmp, "state"),
+				CCC_REVIEW_CODEX_BIN: codex2.bin,
 			});
 			assert.match(String(out?.systemMessage), /Codex APPROVED/);
 		} finally {
@@ -135,8 +135,8 @@ describe("install, upgrade and uninstall with the real CLIs (smoke)", {
 		}
 
 		cli("claude", "plugin", "uninstall", id);
-		cli("claude", "plugin", "marketplace", "remove", "cccr-local");
-		assert.doesNotMatch(cli("claude", "plugin", "list"), /cccr@cccr-local/);
+		cli("claude", "plugin", "marketplace", "remove", "hlavacm");
+		assert.doesNotMatch(cli("claude", "plugin", "list"), /ccc-review@hlavacm/);
 	});
 
 	it("Codex: install, run the installed hooks, upgrade, uninstall", async () => {
@@ -151,7 +151,7 @@ describe("install, upgrade and uninstall with the real CLIs (smoke)", {
 		try {
 			const out = await completeArmedTurn("codex", installed, repo, "cx", {
 				PLUGIN_DATA: join(tmp, "state"),
-				CCCR_CLAUDE_BIN: claude.bin,
+				CCC_REVIEW_CLAUDE_BIN: claude.bin,
 			});
 			assert.match(String(out?.systemMessage), /Claude APPROVED/);
 		} finally {
@@ -165,10 +165,10 @@ describe("install, upgrade and uninstall with the real CLIs (smoke)", {
 		assert.ok(existsSync(join(installed, "UPGRADE_MARK_CODEX")));
 
 		cli("codex", "plugin", "remove", id);
-		cli("codex", "plugin", "marketplace", "remove", "cccr-local");
+		cli("codex", "plugin", "marketplace", "remove", "hlavacm");
 		assert.doesNotMatch(
 			readFileSync(join(String(env.CODEX_HOME), "config.toml"), "utf8"),
-			/cccr/,
+			/ccc-review/,
 		);
 	});
 });

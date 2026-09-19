@@ -8,7 +8,7 @@ export type FakeCodexCall = FakeCall;
 export class FakeCodex extends FakeCli<FakeCodexStep> {
 	static async create(...steps: FakeCodexStep[]): Promise<FakeCodex> {
 		const fake = new FakeCodex(
-			await FakeCli.tempDir("cccr-fake-codex-"),
+			await FakeCli.tempDir("ccc-review-fake-codex-"),
 			"codex",
 		);
 		return FakeCli.setup(fake, "fake-codex.ts", steps);

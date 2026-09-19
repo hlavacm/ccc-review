@@ -16,7 +16,7 @@ describe("real Codex review of a Claude completion (smoke)", () => {
 	before(async () => {
 		repo = await TemporaryGitRepository.create();
 		await repo.commitFile("math.js", "export const add = (a, b) => a + b;\n");
-		stateDir = await makeTempDir("cccr-smoke-state-");
+		stateDir = await makeTempDir("ccc-review-smoke-state-");
 	});
 	after(async () => {
 		await repo.dispose();
@@ -25,7 +25,7 @@ describe("real Codex review of a Claude completion (smoke)", () => {
 
 	it("finds a planted bug, returns it to Claude and never mutates Git", async () => {
 		const host = new ClaudeHostHarness(
-			configFromEnv({ ...process.env, CCCR_STATE_DIR: stateDir }),
+			configFromEnv({ ...process.env, CCC_REVIEW_STATE_DIR: stateDir }),
 			repo.root,
 		);
 		const on = await host.command(

@@ -22,6 +22,12 @@ export function formatFinding(f: Finding): string {
 	return `${f.id} [${f.severity}]${where}: ${f.message}`;
 }
 
+/** The number of a `CCC-###` ID; 0 for any other ID. */
+export function findingNumber(id: string): number {
+	const m = /^CCC-(\d+)$/.exec(id);
+	return m ? Number(m[1]) : 0;
+}
+
 export interface ReviewResult {
 	verdict: Verdict;
 	summary: string;
@@ -50,6 +56,8 @@ export interface ReviewRequest {
 	/** 1-based round being reviewed. */
 	round: number;
 	baseline: GitBaseline;
+	/** Number for the next new finding ID; IDs never repeat within a task. */
+	nextFindingNumber: number;
 	previous?: ReviewResult;
 	context?: ReviewContext;
 }
@@ -86,6 +94,9 @@ function parseFinding(value: unknown, index: number): Finding {
 	if (!isRecord(value)) return fail("not an object");
 	const { id, severity, file, line, message } = value;
 	if (typeof id !== "string" || id === "") return fail("missing id");
+	// The task keeps the highest number; it must survive JSON round-trips.
+	if (!Number.isSafeInteger(findingNumber(id)))
+		return fail(`id number too large ${JSON.stringify(id.slice(0, 40))}`);
 	if (!SEVERITIES.includes(severity as Severity))
 		return fail(`invalid severity ${JSON.stringify(severity)}`);
 	if (typeof message !== "string" || message === "")

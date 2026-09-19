@@ -52,15 +52,15 @@ const runPluginHook = (
 
 describe("Codex plugin manifest", () => {
 	it("points at an existing hooks file and skill", () => {
-		assert.equal(manifest.name, "cccr");
+		assert.equal(manifest.name, "ccc-review");
 		const skill = readFileSync(
-			join(pluginRoot, manifest.skills, "cccr/SKILL.md"),
+			join(pluginRoot, manifest.skills, "ccc-review/SKILL.md"),
 			"utf8",
 		);
-		assert.match(skill, /^---\nname: cccr\ndescription: .+\n---\n/);
+		assert.match(skill, /^---\nname: ccc-review\ndescription: .+\n---\n/);
 		assert.match(
 			readFileSync(
-				join(pluginRoot, manifest.skills, "cccr/agents/openai.yaml"),
+				join(pluginRoot, manifest.skills, "ccc-review/agents/openai.yaml"),
 				"utf8",
 			),
 			/allow_implicit_invocation: false/,
@@ -138,10 +138,10 @@ describe("Codex → Claude workflow through the plugin hooks", () => {
 	beforeEach(async () => {
 		repo = await TemporaryGitRepository.create("my repo");
 		await repo.commitFile("app.ts", "export const x = 1;\n");
-		stateDir = await makeTempDir("cccr-state-");
+		stateDir = await makeTempDir("ccc-review-state-");
 		claude = await FakeClaude.create();
-		// PLUGIN_DATA is where Codex wants plugin state; no CCCR_STATE_DIR here.
-		env = { PLUGIN_DATA: stateDir, CCCR_CLAUDE_BIN: claude.bin };
+		// PLUGIN_DATA is where Codex wants plugin state; no CCC_REVIEW_STATE_DIR here.
+		env = { PLUGIN_DATA: stateDir, CCC_REVIEW_CLAUDE_BIN: claude.bin };
 	});
 	afterEach(async () => {
 		await repo.dispose();
@@ -149,7 +149,7 @@ describe("Codex → Claude workflow through the plugin hooks", () => {
 		await removeDir(stateDir);
 	});
 
-	it("repo → $cccr on → completion → fake claude → continuation → fix → approve → persisted state", async () => {
+	it("repo → $ccc-review on → completion → fake claude → continuation → fix → approve → persisted state", async () => {
 		await claude.script(
 			{ output: changesRequested(finding("CCC-001", "x must be 3")) },
 			{ output: approved() },
@@ -159,7 +159,7 @@ describe("Codex → Claude workflow through the plugin hooks", () => {
 		assert.equal(prompt("hello"), undefined);
 		assert.equal(stop("hello"), undefined);
 
-		const on = prompt("$cccr on");
+		const on = prompt("$ccc-review on");
 		assert.equal(on?.decision, "block");
 		assert.match(String(on?.reason), /enabled\. Claude will review/);
 		assert.equal(prompt("make x 3"), undefined);
@@ -195,16 +195,16 @@ describe("Codex → Claude workflow through the plugin hooks", () => {
 		assert.equal(stop("CCC-001: fixed.", true), undefined);
 		assert.equal((await claude.calls()).length, 2);
 
-		const status = prompt("$cccr status");
+		const status = prompt("$ccc-review status");
 		assert.match(String(status?.reason), /round 2: APPROVED/);
 	});
 
 	it("missing claude binary fails fast with the default timeout and is not approval", () => {
-		prompt("$cccr on");
+		prompt("$ccc-review on");
 		const started = Date.now();
 		const out = stop("done", false, {
 			PLUGIN_DATA: stateDir,
-			CCCR_CLAUDE_BIN: join(stateDir, "missing-claude"),
+			CCC_REVIEW_CLAUDE_BIN: join(stateDir, "missing-claude"),
 		});
 		assert.ok(Date.now() - started < 20_000);
 		assert.equal(out?.decision, undefined);
@@ -213,7 +213,7 @@ describe("Codex → Claude workflow through the plugin hooks", () => {
 
 	it("aborting the Stop hook kills the whole claude process group", async () => {
 		await claude.script({ sleepMs: 30_000, childSleepMs: 30_000 });
-		prompt("$cccr on");
+		prompt("$ccc-review on");
 		const hook = spawn(
 			process.execPath,
 			[join(pluginRoot, "src/hosts/codex/cli.ts"), "stop"],
@@ -256,7 +256,7 @@ describe("Codex → Claude workflow through the plugin hooks", () => {
 	it("garbage stdin and bad config never block or crash the hook", () => {
 		const out = runHookCommand(hookCommand("Stop"), pluginRoot, "garbage", {
 			PLUGIN_DATA: stateDir,
-			CCCR_CLAUDE_TIMEOUT_MS: "soon",
+			CCC_REVIEW_CLAUDE_TIMEOUT_MS: "soon",
 		});
 		assert.ok(out);
 		assert.deepEqual(Object.keys(out), ["systemMessage"]);

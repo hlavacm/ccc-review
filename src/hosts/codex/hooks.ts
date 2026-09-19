@@ -33,26 +33,32 @@ export interface HookInput {
 }
 
 /**
- * `$cccr …` (explicit skill mention) or the plugin-namespaced `$cccr:cccr …`.
+ * `$ccc-review …` (explicit skill mention) or the plugin-namespaced `$ccc-review:ccc-review …`.
  * Group 1 = the arguments.
  */
-const COMMAND = /^\$cccr(?::cccr)?(?:\s+([\s\S]*))?$/;
+const COMMAND = /^\$ccc-review(?::ccc-review)?(?:\s+([\s\S]*))?$/;
 
 export function configFromEnv(env: NodeJS.ProcessEnv): HostConfig {
-	const effort = oneOf(env, "CCCR_CLAUDE_EFFORT", CLAUDE_EFFORTS);
+	const effort = oneOf(env, "CCC_REVIEW_CLAUDE_EFFORT", CLAUDE_EFFORTS);
 	const config: HostConfig = {
 		// Codex gives plugin hooks PLUGIN_DATA (and CLAUDE_PLUGIN_DATA too).
-		stateDir: env.CCCR_STATE_DIR || env.PLUGIN_DATA || join(homedir(), ".cccr"),
+		stateDir:
+			env.CCC_REVIEW_STATE_DIR ||
+			env.PLUGIN_DATA ||
+			join(homedir(), ".ccc-review"),
 		reviewer: new ClaudeReviewer({
-			bin: env.CCCR_CLAUDE_BIN || "claude",
+			bin: env.CCC_REVIEW_CLAUDE_BIN || "claude",
 			timeoutMs:
-				positiveInt(env, "CCCR_CLAUDE_TIMEOUT_MS") ?? DEFAULT_CLAUDE_TIMEOUT_MS,
-			...(env.CCCR_CLAUDE_MODEL ? { model: env.CCCR_CLAUDE_MODEL } : {}),
+				positiveInt(env, "CCC_REVIEW_CLAUDE_TIMEOUT_MS") ??
+				DEFAULT_CLAUDE_TIMEOUT_MS,
+			...(env.CCC_REVIEW_CLAUDE_MODEL
+				? { model: env.CCC_REVIEW_CLAUDE_MODEL }
+				: {}),
 			...(effort ? { effort } : {}),
 			env,
 		}),
 	};
-	const maxRounds = positiveInt(env, "CCCR_MAX_ROUNDS");
+	const maxRounds = positiveInt(env, "CCC_REVIEW_MAX_ROUNDS");
 	if (maxRounds !== undefined) config.maxRounds = maxRounds;
 	return config;
 }
@@ -61,7 +67,7 @@ const promptText = (input: HookInput) =>
 	typeof input.prompt === "string" ? input.prompt.trim() : "";
 
 /**
- * UserPromptSubmit sees every prompt. `$cccr on [task] | off | status` is
+ * UserPromptSubmit sees every prompt. `$ccc-review on [task] | off | status` is
  * handled here and blocked, so it never reaches the model; while review is
  * active any other main-agent prompt is recorded as the task.
  */
@@ -136,7 +142,7 @@ export async function runHook(
 		return await handler(getConfig(), input as HookInput);
 	} catch (error) {
 		const message = `CCC Review error: ${(error as Error).message}`;
-		// A failed $cccr command must not fall through to the model.
+		// A failed $ccc-review command must not fall through to the model.
 		return event === "prompt-submit" && isCommand(stdin)
 			? { decision: "block", reason: message }
 			: { systemMessage: message };

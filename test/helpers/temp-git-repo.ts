@@ -23,7 +23,7 @@ export class TemporaryGitRepository {
 
 	/** `name` creates the repo in a subdirectory, e.g. to test unusual root paths. */
 	static async create(name?: string): Promise<TemporaryGitRepository> {
-		const parent = await makeTempDir("cccr-repo-");
+		const parent = await makeTempDir("ccc-review-repo-");
 		const root = name === undefined ? parent : join(parent, name);
 		await mkdir(root, { recursive: true });
 		const repo = new TemporaryGitRepository(root, parent);

@@ -2,7 +2,7 @@
 	"hooks": {
 		"UserPromptExpansion": [
 			{
-				"matcher": "^(cccr:)?cccr$",
+				"matcher": "^(ccc-review:)?ccc-review$",
 				"hooks": [
 					{
 						"type": "command",

@@ -77,14 +77,14 @@ describe("plugin manifest", () => {
 		const plugin = JSON.parse(
 			readFileSync(join(pluginRoot, ".claude-plugin/plugin.json"), "utf8"),
 		);
-		assert.equal(plugin.name, "cccr");
+		assert.equal(plugin.name, "ccc-review");
 		const market = JSON.parse(
 			readFileSync(join(pluginRoot, ".claude-plugin/marketplace.json"), "utf8"),
 		);
-		assert.equal(market.plugins[0].name, "cccr");
+		assert.equal(market.plugins[0].name, "ccc-review");
 		assert.equal(market.plugins[0].source, "./");
 		const skill = readFileSync(
-			join(pluginRoot, "skills/cccr/SKILL.md"),
+			join(pluginRoot, "skills/ccc-review/SKILL.md"),
 			"utf8",
 		);
 		assert.match(
@@ -106,27 +106,27 @@ describe("plugin manifest", () => {
 		}
 	});
 
-	// Regression: the bare `cccr` matcher is an exact-string match in Claude
-	// Code, so the namespaced `/cccr:cccr` never reached the command hook.
+	// Regression: the bare `ccc-review` matcher is an exact-string match in Claude
+	// Code, so the namespaced `/ccc-review:ccc-review` never reached the command hook.
 	it("command matcher selects both command names and nothing else", () => {
 		const matcher = hooksJson.hooks.UserPromptExpansion?.[0]?.matcher;
 		assert.ok(matcher);
-		for (const name of ["cccr", "cccr:cccr"])
+		for (const name of ["ccc-review", "ccc-review:ccc-review"])
 			assert.ok(claudeCodeMatches(matcher, name), name);
 		for (const name of [
 			"deploy",
-			"cccr:on",
-			"other:cccr",
-			"cccrx",
-			"mycccr",
-			"cccr-x",
+			"ccc-review:on",
+			"other:ccc-review",
+			"ccc-reviewx",
+			"myccc-review",
+			"ccc-review-x",
 		])
 			assert.ok(!claudeCodeMatches(matcher, name), name);
 	});
 
 	it("matcher evaluation follows the documented rules", () => {
-		assert.ok(claudeCodeMatches("cccr", "cccr"));
-		assert.ok(!claudeCodeMatches("cccr", "cccr:cccr"));
+		assert.ok(claudeCodeMatches("ccc-review", "ccc-review"));
+		assert.ok(!claudeCodeMatches("ccc-review", "ccc-review:ccc-review"));
 		assert.ok(claudeCodeMatches("Edit|Write", "Write"));
 		assert.ok(claudeCodeMatches("Edit.*", "NotebookEdit"));
 	});
@@ -154,9 +154,9 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 	beforeEach(async () => {
 		repo = await TemporaryGitRepository.create("my repo");
 		await repo.commitFile("app.ts", "export const x = 1;\n");
-		stateDir = await makeTempDir("cccr-state-");
+		stateDir = await makeTempDir("ccc-review-state-");
 		codex = await FakeCodex.create();
-		env = { CCCR_STATE_DIR: stateDir, CCCR_CODEX_BIN: codex.bin };
+		env = { CCC_REVIEW_STATE_DIR: stateDir, CCC_REVIEW_CODEX_BIN: codex.bin };
 	});
 	afterEach(async () => {
 		await repo.dispose();
@@ -188,10 +188,10 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 			{
 				...base("UserPromptExpansion"),
 				expansion_type: "slash_command",
-				command_name: "cccr:cccr",
+				command_name: "ccc-review:ccc-review",
 				command_args: "on",
 				command_source: "plugin",
-				prompt: "/cccr:cccr on",
+				prompt: "/ccc-review:ccc-review on",
 			},
 			env,
 		);
@@ -244,15 +244,15 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 	// Stop hook hung for the whole Codex timeout (20 min) when codex was missing.
 	it("missing codex binary fails fast with default timeout and is not approval", () => {
 		const e = {
-			CCCR_STATE_DIR: stateDir,
-			CCCR_CODEX_BIN: join(stateDir, "missing-codex"),
+			CCC_REVIEW_STATE_DIR: stateDir,
+			CCC_REVIEW_CODEX_BIN: join(stateDir, "missing-codex"),
 		};
 		// Enabled while codex was available; it is gone by the time Claude stops.
 		runPluginHook(
 			"UserPromptExpansion",
 			{
 				...base("UserPromptExpansion"),
-				command_name: "cccr:cccr",
+				command_name: "ccc-review:ccc-review",
 				command_args: "on",
 			},
 			env,
@@ -280,7 +280,7 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 			"UserPromptExpansion",
 			{
 				...base("UserPromptExpansion"),
-				command_name: "cccr:cccr",
+				command_name: "ccc-review:ccc-review",
 				command_args: "on",
 			},
 			env,
@@ -342,7 +342,7 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 			"UserPromptExpansion",
 			{
 				...base("UserPromptExpansion"),
-				command_name: "cccr:cccr",
+				command_name: "ccc-review:ccc-review",
 				command_args: "on",
 			},
 			env,
@@ -362,8 +362,8 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 
 	it("garbage stdin and bad config never block or crash the hook", () => {
 		const out = spawnHook("Stop", "garbage", {
-			CCCR_STATE_DIR: stateDir,
-			CCCR_CODEX_TIMEOUT_MS: "soon",
+			CCC_REVIEW_STATE_DIR: stateDir,
+			CCC_REVIEW_CODEX_TIMEOUT_MS: "soon",
 		});
 		assert.equal(out?.decision, undefined);
 		assert.match(String(out?.systemMessage), /CCC Review error/);

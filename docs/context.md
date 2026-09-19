@@ -1,8 +1,8 @@
-# CCCR — MVP Context
+# CCC Review — MVP Context
 
 ## Name
 
-**CCCR**
+**CCC Review**
 
 Expanded name:
 
@@ -12,7 +12,7 @@ Expanded name:
 
 ## Purpose
 
-CCCR automates a workflow that already works manually:
+CCC Review automates a workflow that already works manually:
 
 1. one coding agent plans and implements a task,
 2. another coding agent independently reviews the real repository changes,
@@ -257,16 +257,16 @@ Each such failure path should have deterministic automated coverage.
 
 ## Explicit activation
 
-CCCR must not run for every session by default.
+CCC Review must not run for every session by default.
 
 Use an explicit host-native activation mechanism.
 
 Preferred Claude Code UX if current APIs support it naturally:
 
 ```text
-/cccr on
-/cccr off
-/cccr status
+/ccc-review on
+/ccc-review off
+/ccc-review status
 ```
 
 Codex may use a different native command/skill syntax.

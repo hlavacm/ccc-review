@@ -47,7 +47,7 @@ At minimum cover:
 Add a simple diagnostic command only if it is actually useful, e.g.:
 
 ```text
-cccr doctor
+ccc-review doctor
 ```
 
 or host-native equivalent.
@@ -113,10 +113,10 @@ Codex CLI 0.155.1; `model_reasoning_effort` values and `CODEX_API_KEY` for `code
 
 ### Changes
 
-- `CodexReviewer`: `check()` = `codex login status` preflight (only `codex --version` with `CODEX_API_KEY`), run before every review and by `/cccr:cccr on`; short actionable messages (missing binary, not logged in, timeout in minutes + setting, invalid JSON excerpt, last 10 stderr lines + login hint on auth errors); SIGTERM/SIGINT/SIGHUP kill the process group and fail the review (recorded `reviewer_error`, task stopped, claims dropped); `model` (`-m`) and `reasoningEffort` (`-c model_reasoning_effort=…`); `describe()`.
+- `CodexReviewer`: `check()` = `codex login status` preflight (only `codex --version` with `CODEX_API_KEY`), run before every review and by `/ccc-review:ccc-review on`; short actionable messages (missing binary, not logged in, timeout in minutes + setting, invalid JSON excerpt, last 10 stderr lines + login hint on auth errors); SIGTERM/SIGINT/SIGHUP kill the process group and fail the review (recorded `reviewer_error`, task stopped, claims dropped); `model` (`-m`) and `reasoningEffort` (`-c model_reasoning_effort=…`); `describe()`.
 - Prompt: `git diff <activation HEAD>` + `git log <HEAD>..HEAD` (status/`--cached`/log without commits); dirty list capped at 50 paths, task/report at the last 12 000 chars.
 - Core: optional `Reviewer.check()`/`describe()`; append-only history `history/<taskId>.jsonl` (`appendHistory`/`readHistory`, corrupt → `StateError`).
-- Host: `on` preflight + dirty warning + `CCCR_MAX_ROUNDS`; history for on/round/off; `off` and every terminal outcome drop claims (with a post-claim state re-check so a stale duplicate cannot start a round); `status` shows reviewer settings, round history and file paths; findings sorted by severity with indented multi-line messages; `CCCR_CODEX_MODEL`, `CCCR_CODEX_REASONING_EFFORT` validated.
+- Host: `on` preflight + dirty warning + `CCC_REVIEW_MAX_ROUNDS`; history for on/round/off; `off` and every terminal outcome drop claims (with a post-claim state re-check so a stale duplicate cannot start a round); `status` shows reviewer settings, round history and file paths; findings sorted by severity with indented multi-line messages; `CCC_REVIEW_CODEX_MODEL`, `CCC_REVIEW_CODEX_REASONING_EFFORT` validated.
 - README: example session, configuration via settings `env`, troubleshooting, real-use checklist; opt-in `pnpm test:smoke`.
 
 ### Regression tests
@@ -137,7 +137,7 @@ Codex CLI 0.155.1; `model_reasoning_effort` values and `CODEX_API_KEY` for `code
 
 ### Real-use checklist results
 
-- 2026-09-19 `pnpm test:smoke` (real Codex CLI 0.155.1, disposable repo, outside the development sandbox): passed in 33 s. `/cccr:cccr on` preflight passed; Codex found the planted `multiply` bug (`CCC-001 [high] math.js:2`, verified `multiply(2, 3)` returns 5), the Stop hook blocked with the finding and instructions, status showed round 1/3 with history, and Git state was unchanged.
+- 2026-09-19 `pnpm test:smoke` (real Codex CLI 0.155.1, disposable repo, outside the development sandbox): passed in 33 s. `/ccc-review:ccc-review on` preflight passed; Codex found the planted `multiply` bug (`CCC-001 [high] math.js:2`, verified `multiply(2, 3)` returns 5), the Stop hook blocked with the finding and instructions, status showed round 1/3 with history, and Git state was unchanged.
 - Manual Claude Code steps (README "Real-use checklist" 1–8, including Esc during a review): pending.
 
 ### Deliberately deferred

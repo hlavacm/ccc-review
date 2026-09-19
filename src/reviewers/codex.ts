@@ -83,7 +83,7 @@ export class CodexReviewer implements Reviewer {
 	async review(request: ReviewRequest): Promise<ReviewResult> {
 		const root = request.baseline.root;
 		await this.check(root);
-		const dir = await mkdtemp(join(tmpdir(), "cccr-codex-"));
+		const dir = await mkdtemp(join(tmpdir(), "ccc-review-codex-"));
 		try {
 			const schemaFile = join(dir, "schema.json");
 			const outFile = join(dir, "result.json");
@@ -162,8 +162,8 @@ export class CodexReviewer implements Reviewer {
 			cwd,
 			input,
 			timeoutMs,
-			missingHint: "install the Codex CLI or set CCCR_CODEX_BIN",
-			timeoutSetting: "CCCR_CODEX_TIMEOUT_MS",
+			missingHint: "install the Codex CLI or set CCC_REVIEW_CODEX_BIN",
+			timeoutSetting: "CCC_REVIEW_CODEX_TIMEOUT_MS",
 		});
 	}
 }

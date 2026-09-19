@@ -1,5 +1,7 @@
 import type { TaskState } from "./state.ts";
 import {
+	type Finding,
+	findingNumber,
 	parseReviewResult,
 	type ReviewContext,
 	type Reviewer,
@@ -39,10 +41,14 @@ export async function runReviewRound(
 		return { state: { ...state, active: false }, outcome: "max_rounds" };
 
 	const round = state.round + 1;
+	// A state saved before lastFindingNumber existed: use its last result.
+	const used =
+		state.lastFindingNumber ?? highest(state.lastResult?.findings ?? []);
 	const request: ReviewRequest = {
 		taskId: state.taskId,
 		round,
 		baseline: state.baseline,
+		nextFindingNumber: used + 1,
 	};
 	if (state.lastResult) request.previous = state.lastResult;
 	if (context) request.context = context;
@@ -62,6 +68,7 @@ export async function runReviewRound(
 	}
 
 	next.lastResult = result;
+	next.lastFindingNumber = Math.max(used, highest(result.findings));
 	switch (result.verdict) {
 		case "APPROVED":
 			return { state: { ...next, active: false }, outcome: "approved" };
@@ -73,6 +80,9 @@ export async function runReviewRound(
 				: { state: next, outcome: "changes_requested" };
 	}
 }
+
+const highest = (findings: Finding[]) =>
+	Math.max(0, ...findings.map((f) => findingNumber(f.id)));
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);

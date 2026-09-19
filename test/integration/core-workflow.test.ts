@@ -18,7 +18,7 @@ describe("core workflow", () => {
 	let stateDir: string;
 	beforeEach(async () => {
 		repo = await TemporaryGitRepository.create();
-		stateDir = join(await makeTempDir(), "cccr");
+		stateDir = join(await makeTempDir(), "ccc-review");
 	});
 	afterEach(async () => {
 		await repo.dispose();

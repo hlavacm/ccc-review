@@ -26,7 +26,7 @@ Both host integrations must be installable and documented, and the deterministic
 The root README should clearly say:
 
 ```text
-CCCR
+CCC Review
 Claude Code ↔ Codex Review
 
 Use Claude Code to implement and Codex to review,
@@ -74,7 +74,7 @@ Document that reviewer context may include:
 Explain:
 
 - reviewer is configured as read-only for source code,
-- CCCR does not auto-commit/reset/stash/push,
+- CCC Review does not auto-commit/reset/stash/push,
 - reviewer failures do not count as approval.
 
 ### Configuration
@@ -160,20 +160,20 @@ Verified 2026-09-19 with the local CLIs (Claude Code 2.1.278, codex-cli 0.155.1:
 
 | | Install | Upgrade | Uninstall |
 | --- | --- | --- | --- |
-| Claude Code | `claude plugin marketplace add <clone>` + `claude plugin install cccr@cccr-local` (cache `<config>/plugins/cache/cccr-local/cccr/<version>`) | `marketplace update` + `plugin update` when the version changed; same version: uninstall + install | `claude plugin uninstall cccr@cccr-local` + `marketplace remove cccr-local` |
-| Codex | `codex plugin marketplace add <clone>` + `codex plugin add cccr@cccr-local` (cache `$CODEX_HOME/plugins/cache/cccr-local/cccr/<version>`), then trust the hooks in `/hooks` | `git pull` + `codex plugin add cccr@cccr-local` again (re-copies) | `codex plugin remove cccr@cccr-local` + `marketplace remove cccr-local` |
+| Claude Code | `claude plugin marketplace add <clone>` + `claude plugin install ccc-review@hlavacm` (cache `<config>/plugins/cache/hlavacm/ccc-review/<version>`) | `marketplace update` + `plugin update` when the version changed; same version: uninstall + install | `claude plugin uninstall ccc-review@hlavacm` + `marketplace remove hlavacm` |
+| Codex | `codex plugin marketplace add <clone>` + `codex plugin add ccc-review@hlavacm` (cache `$CODEX_HOME/plugins/cache/hlavacm/ccc-review/<version>`), then trust the hooks in `/hooks` | `git pull` + `codex plugin add ccc-review@hlavacm` again (re-copies) | `codex plugin remove ccc-review@hlavacm` + `marketplace remove hlavacm` |
 
 Both CLIs copy a local-path marketplace directory as-is, untracked files included (observed: `node_modules/`, `dist/`, `.claude/`), so the README says to install from a clean clone. The hooks need only Node ≥ 22.18: `src/` imports nothing but `node:*` and relative modules.
 
 ### Fixed during this feature (regression tests verified to fail first)
 
-- README told Codex users to run `codex plugin add cccr`; Codex rejects it (`plugin requires --marketplace unless passed as <plugin>@<marketplace>`). Now `cccr@cccr-local`; `packaging.test.ts` checks every `codex plugin add|remove` line against the manifests.
+- README told Codex users to run `codex plugin add ccc-review`; Codex rejects it (`plugin requires --marketplace unless passed as <plugin>@<marketplace>`). Now `ccc-review@hlavacm`; `packaging.test.ts` checks every `codex plugin add|remove` line against the manifests.
 - After Codex review of this feature: the runtime-import check missed side-effect `import "pkg"` (also into `test/`), and the packaged-state check missed extension-less `claims/<taskId>/<hash>` files. Both fixed and mutation-tested (side-effect package import, side-effect import of `test/fixtures`, dynamic `import("pkg")`, a planted claim file).
 - Running a single smoke test as `pnpm test:smoke --test-name-pattern=…` does not filter (Node ignores options after the file glob) and would run the usage-consuming smoke tests. Added `pnpm test:smoke:install` instead; the README test only allows existing scripts.
 
 ### Tests
 
-- `test/integration/packaging.test.ts` (14): MIT license, version equal in `package.json` and both plugin manifests; packaged files (`git ls-files --cached --others --exclude-standard`) contain no `node_modules`/`dist`/`coverage`, `.cccr/`, `.env*`, keys, `.claude/settings.local.json` or task/session/claim/history state; no credential patterns in any packaged file; `src/` imports only `node:*` and modules inside `src/` (no npm dependency, no test code); `fake` files only under `test/`; README tagline, required sections, every `pnpm <script>` it mentions exists, every `CCCR_*` variable read in `src/` is documented, install/uninstall ids match the manifests. A copy of exactly the packaged files (no `node_modules`) runs both plugins through their `hooks.json` command lines: Claude→Codex and Codex→Claude approval, and a reviewer exiting 3 with an APPROVED result is an error that stops the task, not approval. Each hygiene check was mutation-tested (planted token, npm/test import, version mismatch, stray `fake` file, unignored state file, wrong README command).
+- `test/integration/packaging.test.ts` (14): MIT license, version equal in `package.json` and both plugin manifests; packaged files (`git ls-files --cached --others --exclude-standard`) contain no `node_modules`/`dist`/`coverage`, `.ccc-review/`, `.env*`, keys, `.claude/settings.local.json` or task/session/claim/history state; no credential patterns in any packaged file; `src/` imports only `node:*` and modules inside `src/` (no npm dependency, no test code); `fake` files only under `test/`; README tagline, required sections, every `pnpm <script>` it mentions exists, every `CCC_REVIEW_*` variable read in `src/` is documented, install/uninstall ids match the manifests. A copy of exactly the packaged files (no `node_modules`) runs both plugins through their `hooks.json` command lines: Claude→Codex and Codex→Claude approval, and a reviewer exiting 3 with an APPROVED result is an error that stops the task, not approval. Each hygiene check was mutation-tested (planted token, npm/test import, version mismatch, stray `fake` file, unignored state file, wrong README command).
 - `test/helpers/plugin-hooks.ts`: shared hook runner/package copy, now also used by `claude-workflow.test.ts` and `codex-workflow.test.ts` (replacing two copies).
 - `test/smoke/install.smoke.ts` (`pnpm test:smoke:install`, opt-in, no credentials/model; skipped without the CLIs): `claude plugin validate`, then the README's install, run of the installed hooks with fake reviewers, and uninstall for both CLIs. Claude Code upgrade: same version → `plugin update` keeps the old copy, uninstall + install picks up the change; version bump → `marketplace update` + `plugin update` installs the new version, and its hooks run. Codex upgrade: `plugin add` again re-copies. Passed locally.
 - `.github/workflows/ci.yml`: `pnpm install --frozen-lockfile && pnpm check` on Node 22.18 and 24, no secrets.
@@ -183,8 +183,11 @@ Suite: 331 deterministic tests (103 unit, 228 integration), all passing; `pnpm c
 ### Limitations
 
 - 2026-09-19: `pnpm install --frozen-lockfile && pnpm check` passed in a fresh copy of the packaged files (pnpm 12.4.2, Node 26.9: 331/331 tests, typecheck, Biome, build), run outside the development sandbox with `set -e`. The GitHub Actions workflow has not run yet (no remote).
-- The interactive TUIs (Claude Code `/cccr:cccr`, Codex `$cccr` and `/hooks` trust) are covered by hook-level tests and the install smoke test, not by a scripted TUI session.
-- Runtime messages still say `CCC Review`.
+- The interactive TUIs (Claude Code `/ccc-review:ccc-review`, Codex `$ccc-review` and `/hooks` trust) are covered by hook-level tests and the install smoke test, not by a scripted TUI session.
+
+### Follow-up review (2026-09-19)
+
+- Naming unified before publishing: `CCC Review` in human-readable text (messages, prompts, skills, docs, README title) and `ccc-review` in code and paths (plugin and skill `ccc-review`, so `/ccc-review:ccc-review` and `$ccc-review`; marketplace `hlavacm`; state dir `~/.ccc-review`; package name). Environment variables cannot contain `-`, so they use `CCC_REVIEW_*`. `packaging.test.ts` checks the `# CCC Review` heading, the install/uninstall ids against the manifests and that every `CCC_REVIEW_*` variable read in `src/` is documented.
 
 ### Ideas for v2 (only if real use asks for them)
 

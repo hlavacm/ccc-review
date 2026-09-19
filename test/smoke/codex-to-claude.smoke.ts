@@ -17,7 +17,7 @@ describe("real Claude review of a Codex completion (smoke)", () => {
 	before(async () => {
 		repo = await TemporaryGitRepository.create();
 		await repo.commitFile("math.js", "export const add = (a, b) => a + b;\n");
-		stateDir = await makeTempDir("cccr-smoke-state-");
+		stateDir = await makeTempDir("ccc-review-smoke-state-");
 	});
 	after(async () => {
 		await repo.dispose();
@@ -26,7 +26,7 @@ describe("real Claude review of a Codex completion (smoke)", () => {
 
 	it("finds a planted bug, returns it to Codex and never mutates Git", async () => {
 		const host = new CodexHostHarness(
-			configFromEnv({ ...process.env, CCCR_STATE_DIR: stateDir }),
+			configFromEnv({ ...process.env, CCC_REVIEW_STATE_DIR: stateDir }),
 			repo.root,
 		);
 		// Czech task, English report: findings must come back in the task's language.

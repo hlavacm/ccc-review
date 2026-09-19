@@ -71,7 +71,7 @@ describe("Codex host", () => {
 	beforeEach(async () => {
 		repo = await TemporaryGitRepository.create();
 		await repo.commitFile("app.ts", "export const x = 1;\n");
-		stateDir = await makeTempDir("cccr-state-");
+		stateDir = await makeTempDir("ccc-review-state-");
 		claude = await FakeClaude.create();
 		await setup();
 	});
@@ -84,16 +84,16 @@ describe("Codex host", () => {
 
 	const calls = async () => (await claude.calls()).length;
 
-	describe("$cccr command", () => {
+	describe("$ccc-review command", () => {
 		it("the plugin-namespaced mention works too", async () => {
-			const on = await host.command("on", "$cccr:cccr");
+			const on = await host.command("on", "$ccc-review:ccc-review");
 			assert.match(on?.reason ?? "", /enabled\. Claude will review/);
 			assert.equal((await host.state())?.active, true);
 		});
 
-		it("bare $cccr shows status", async () => {
+		it("bare $ccc-review shows status", async () => {
 			assert.match(
-				(await host.prompt("$cccr"))?.reason ?? "",
+				(await host.prompt("$ccc-review"))?.reason ?? "",
 				/off \(never enabled/,
 			);
 		});
@@ -117,11 +117,11 @@ describe("Codex host", () => {
 
 		it("similar prompts are not commands and never blocked", async () => {
 			for (const prompt of [
-				"$cccrx on",
-				"$cccr-foo on",
-				"please $cccr on",
-				"$other:cccr on",
-				"cccr on",
+				"$ccc-reviewx on",
+				"$ccc-review-foo on",
+				"please $ccc-review on",
+				"$other:ccc-review on",
+				"ccc-review on",
 			])
 				assert.equal(await host.prompt(prompt), undefined, prompt);
 			assert.equal(await host.state(), undefined);
@@ -135,7 +135,7 @@ describe("Codex host", () => {
 		});
 
 		it("outside a Git repository nothing is enabled", async () => {
-			const dir = await makeTempDir("cccr-nogit-");
+			const dir = await makeTempDir("ccc-review-nogit-");
 			try {
 				const h = new CodexHostHarness(
 					{
@@ -184,11 +184,11 @@ describe("Codex host", () => {
 				agent_id: "agent-1",
 				agent_type: "worker",
 			});
-			await host.prompt("$cccr status");
+			await host.prompt("$ccc-review status");
 			await host.stop("done");
 			const [call] = await claude.calls();
 			assert.match(call?.stdin ?? "", /Original task:\nimplement feature A\n/);
-			assert.doesNotMatch(call?.stdin ?? "", /spawned work|\$cccr/);
+			assert.doesNotMatch(call?.stdin ?? "", /spawned work|\$ccc-review/);
 		});
 
 		it("a missing final message is reviewed without a report", async () => {
@@ -285,7 +285,7 @@ describe("Codex host", () => {
 			assert.equal(await calls(), 0);
 		});
 
-		it("a failing $cccr command is blocked with the error", async () => {
+		it("a failing $ccc-review command is blocked with the error", async () => {
 			await host.command("on");
 			const taskId = (await host.state())?.taskId ?? "";
 			await writeFile(join(stateDir, "tasks", `${taskId}.json`), "{");
@@ -308,7 +308,7 @@ describe("Codex host", () => {
 
 		it("invalid hook payloads are reported", async () => {
 			const cfg = () => host.config;
-			// Only a failed $cccr command is blocked; everything else is reported.
+			// Only a failed $ccc-review command is blocked; everything else is reported.
 			for (const [event, stdin, error, key] of [
 				["stop", "not json", /error/, "systemMessage"],
 				["prompt-submit", "not json", /error/, "systemMessage"],
@@ -328,7 +328,7 @@ describe("Codex host", () => {
 				],
 				[
 					"prompt-submit",
-					JSON.stringify({ session_id: "../x", prompt: "$cccr on" }),
+					JSON.stringify({ session_id: "../x", prompt: "$ccc-review on" }),
 					/invalid session_id/,
 					"reason",
 				],
@@ -346,15 +346,15 @@ describe("Codex host", () => {
 				JSON.stringify({ session_id: "s", last_assistant_message: "x" }),
 				() =>
 					configFromEnv({
-						CCCR_STATE_DIR: stateDir,
-						CCCR_CLAUDE_EFFORT: "huge",
+						CCC_REVIEW_STATE_DIR: stateDir,
+						CCC_REVIEW_CLAUDE_EFFORT: "huge",
 					}),
 			);
 			outputs.push(out);
 			assert.equal(out?.decision, undefined);
 			assert.match(
 				out?.systemMessage ?? "",
-				/invalid CCCR_CLAUDE_EFFORT "huge"/,
+				/invalid CCC_REVIEW_CLAUDE_EFFORT "huge"/,
 			);
 		});
 
@@ -374,22 +374,23 @@ describe("Codex host", () => {
 	});
 
 	describe("configuration", () => {
-		it("state dir: CCCR_STATE_DIR, then PLUGIN_DATA, then ~/.cccr", () => {
+		it("state dir: CCC_REVIEW_STATE_DIR, then PLUGIN_DATA, then ~/.ccc-review", () => {
 			assert.equal(
-				configFromEnv({ CCCR_STATE_DIR: "/a", PLUGIN_DATA: "/b" }).stateDir,
+				configFromEnv({ CCC_REVIEW_STATE_DIR: "/a", PLUGIN_DATA: "/b" })
+					.stateDir,
 				"/a",
 			);
 			assert.equal(configFromEnv({ PLUGIN_DATA: "/b" }).stateDir, "/b");
-			assert.equal(configFromEnv({}).stateDir, join(homedir(), ".cccr"));
+			assert.equal(configFromEnv({}).stateDir, join(homedir(), ".ccc-review"));
 		});
 
 		it("reads claude binary, timeout, model, effort and max rounds", () => {
 			const c = configFromEnv({
-				CCCR_CLAUDE_BIN: "/x/claude",
-				CCCR_CLAUDE_TIMEOUT_MS: "60000",
-				CCCR_CLAUDE_MODEL: "opus",
-				CCCR_CLAUDE_EFFORT: "high",
-				CCCR_MAX_ROUNDS: "2",
+				CCC_REVIEW_CLAUDE_BIN: "/x/claude",
+				CCC_REVIEW_CLAUDE_TIMEOUT_MS: "60000",
+				CCC_REVIEW_CLAUDE_MODEL: "opus",
+				CCC_REVIEW_CLAUDE_EFFORT: "high",
+				CCC_REVIEW_MAX_ROUNDS: "2",
 			});
 			assert.equal(
 				c.reviewer.describe?.(),
@@ -403,10 +404,10 @@ describe("Codex host", () => {
 		});
 
 		for (const [name, value] of [
-			["CCCR_CLAUDE_TIMEOUT_MS", "soon"],
-			["CCCR_CLAUDE_TIMEOUT_MS", "0"],
-			["CCCR_MAX_ROUNDS", "-1"],
-			["CCCR_CLAUDE_EFFORT", "ultra"],
+			["CCC_REVIEW_CLAUDE_TIMEOUT_MS", "soon"],
+			["CCC_REVIEW_CLAUDE_TIMEOUT_MS", "0"],
+			["CCC_REVIEW_MAX_ROUNDS", "-1"],
+			["CCC_REVIEW_CLAUDE_EFFORT", "ultra"],
 		] as const)
 			it(`rejects ${name}=${JSON.stringify(value)}`, () => {
 				assert.throws(() => configFromEnv({ [name]: value }), /invalid/);

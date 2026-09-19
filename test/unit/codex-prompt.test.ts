@@ -8,6 +8,7 @@ const request = (extra: Partial<ReviewRequest> = {}): ReviewRequest => ({
 	taskId: "t",
 	round: 1,
 	baseline: { root: "/r", headSha: "abc123", branch: "main", status: [] },
+	nextFindingNumber: 1,
 	...extra,
 });
 
@@ -62,10 +63,11 @@ describe("buildReviewPrompt", () => {
 		assert.match(p, /\(detached HEAD\)/);
 	});
 
-	it("carries previous findings and continues ID numbering", () => {
+	it("carries previous findings and numbers new ones from nextFindingNumber", () => {
 		const p = buildReviewPrompt(
 			request({
 				round: 2,
+				nextFindingNumber: 3,
 				previous: changesRequested(
 					{ ...finding("CCC-002", "leak"), file: "a.ts", line: 7 },
 					finding("custom", "x"),
@@ -75,6 +77,18 @@ describe("buildReviewPrompt", () => {
 		assert.match(p, /CCC-002 \[high\] a\.ts:7: leak/);
 		assert.match(p, /Reuse the same ID/);
 		assert.match(p, /Number new findings CCC-003, CCC-004/);
+	});
+
+	it("numbers past IDs of earlier rounds, not only the previous one", () => {
+		// Round 1 used CCC-001..005; round 2 left only CCC-001 open.
+		const p = buildReviewPrompt(
+			request({
+				round: 3,
+				nextFindingNumber: 6,
+				previous: changesRequested(finding("CCC-001")),
+			}),
+		);
+		assert.match(p, /Number new findings CCC-006, CCC-007/);
 	});
 });
 

@@ -1,6 +1,6 @@
 {
-	"name": "cccr",
-	"description": "CCCR (Claude Code ↔ Codex Review): Codex independently reviews Claude Code's changes; findings go back to Claude in a bounded loop.",
+	"name": "ccc-review",
+	"description": "CCC Review (Claude Code ↔ Codex Review): Codex independently reviews Claude Code's changes; findings go back to Claude in a bounded loop.",
 	"version": "1.0.0",
 	"author": {
 		"name": "Martin Hlaváč"

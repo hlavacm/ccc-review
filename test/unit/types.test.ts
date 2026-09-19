@@ -90,6 +90,17 @@ describe("parseReviewResult", () => {
 			},
 		],
 		[
+			// Would become Infinity in lastFindingNumber and corrupt the state.
+			"finding with an unsafe ID number",
+			{
+				verdict: "CHANGES_REQUESTED",
+				summary: "",
+				findings: [
+					{ id: `CCC-${"9".repeat(309)}`, severity: "high", message: "m" },
+				],
+			},
+		],
+		[
 			"finding with non-integer line",
 			{
 				verdict: "CHANGES_REQUESTED",

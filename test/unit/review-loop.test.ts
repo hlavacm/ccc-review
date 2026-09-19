@@ -63,6 +63,50 @@ describe("runReviewRound", () => {
 		assert.equal(reviewer.requests[1]?.round, 2);
 	});
 
+	it("finding IDs never repeat within a task", async () => {
+		const reviewer = new FakeReviewer(
+			changesRequested(
+				finding("CCC-001"),
+				finding("CCC-002"),
+				finding("CCC-003"),
+			),
+			// CCC-002 and CCC-003 were fixed; only CCC-001 remains.
+			changesRequested(finding("CCC-001")),
+			approved(),
+		);
+		let state = newState(5);
+		for (let i = 0; i < 3; i++)
+			state = (await runReviewRound(state, reviewer)).state;
+		assert.deepEqual(
+			reviewer.requests.map((r) => r.nextFindingNumber),
+			// Round 3 must not hand out CCC-002 again.
+			[1, 4, 4],
+		);
+		assert.equal(state.lastFindingNumber, 3);
+	});
+
+	it("a reviewer error keeps the highest finding number", async () => {
+		const reviewer = new FakeReviewer(
+			changesRequested(finding("CCC-007")),
+			new Error("boom"),
+		);
+		const first = await runReviewRound(newState(), reviewer);
+		const second = await runReviewRound(first.state, reviewer);
+		assert.equal(second.outcome, "reviewer_error");
+		assert.equal(second.state.lastFindingNumber, 7);
+	});
+
+	it("a state saved before lastFindingNumber existed numbers on from its last result", async () => {
+		const reviewer = new FakeReviewer(approved());
+		const old: TaskState = {
+			...newState(),
+			round: 1,
+			lastResult: changesRequested(finding("CCC-002"), finding("x-9")),
+		};
+		await runReviewRound(old, reviewer);
+		assert.equal(reviewer.requests[0]?.nextFindingNumber, 3);
+	});
+
 	it("needs human stops the task without approval", async () => {
 		const { state, outcome } = await runReviewRound(
 			newState(),

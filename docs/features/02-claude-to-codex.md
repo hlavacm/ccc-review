@@ -6,7 +6,7 @@ DONE
 
 ## Objective
 
-Deliver the first genuinely useful CCCR workflow:
+Deliver the first genuinely useful CCC Review workflow:
 
 > Claude Code implements → Codex reviews → feedback returns to Claude → bounded re-review loop.
 
@@ -57,9 +57,9 @@ Implement explicit activation for the current Claude Code task/session.
 Prefer native UX equivalent to:
 
 ```text
-/cccr on
-/cccr off
-/cccr status
+/ccc-review on
+/ccc-review off
+/ccc-review status
 ```
 
 If current Claude plugin APIs make another syntax more natural, use that and document it.
@@ -251,22 +251,22 @@ Docs verified 2026-09-19 (code.claude.com hooks / plugins / plugins-reference / 
 
 ### Claude extension points used
 
-- Plugin at the repo root: `.claude-plugin/plugin.json` (`name: cccr`), `.claude-plugin/marketplace.json` (`cccr-local`, source `./`), `hooks/hooks.json`, `skills/cccr/SKILL.md`. `claude plugin validate` passes.
-- Activation: plugin skills are always namespaced, so the command is `/cccr:cccr on [task] | off | status`. A `UserPromptExpansion` hook (matcher `^(cccr:)?cccr$`; a bare `cccr` is an exact-string match and would miss the namespaced `cccr:cccr`) handles it from the JSON payload (`command_name`, `command_args`, `session_id`, `cwd`) and returns `{"decision":"block","reason":…}` so the result is shown to the user without a model turn and without building a shell command from user text. The skill (`disable-model-invocation: true`) is only a fallback telling the user review is NOT active if the hook did not run.
+- Plugin at the repo root: `.claude-plugin/plugin.json` (`name: ccc-review`), `.claude-plugin/marketplace.json` (`hlavacm`, source `./`), `hooks/hooks.json`, `skills/ccc-review/SKILL.md`. `claude plugin validate` passes.
+- Activation: plugin skills are always namespaced, so the command is `/ccc-review:ccc-review on [task] | off | status`. A `UserPromptExpansion` hook (matcher `^(ccc-review:)?ccc-review$`; a bare `ccc-review` is an exact-string match and would miss the namespaced `ccc-review:ccc-review`) handles it from the JSON payload (`command_name`, `command_args`, `session_id`, `cwd`) and returns `{"decision":"block","reason":…}` so the result is shown to the user without a model turn and without building a shell command from user text. The skill (`disable-model-invocation: true`) is only a fallback telling the user review is NOT active if the hook did not run.
 - Task context: `UserPromptSubmit` (`prompt`) records user prompts while active; text after `on` is recorded too.
 - Review: `Stop` hook, `timeout: 1800` s. `last_assistant_message` is the writer report. `CHANGES_REQUESTED` → `{"decision":"block","reason":<findings + instructions>}` (same session continues). Other outcomes → `systemMessage` only. `stop_hook_active` is deliberately not a guard (re-review after a block is the loop); termination comes from `maxRounds` (3) and Claude Code's own 8-block cap.
 - Session identity: `session_id` → `sessions/<id>.json` → `taskId`.
 
 ### Codex invocation / safety
 
-`codex exec --sandbox read-only -c approval_policy="never" --cd <root> --ephemeral --color never --output-schema <strict schema> --output-last-message <file> -`, spawned as executable + argv, prompt on stdin, stdout ignored, stderr tail (4 KB) kept for messages. Codex runs in its own process group; at the deadline (default 20 min, `CCCR_CODEX_TIMEOUT_MS`) the whole group is SIGKILLed and the review fails immediately, without waiting for streams to close, and a result arriving later is ignored. Missing binary, non-zero exit (incl. auth), timeout, missing/empty/invalid JSON output and shape mismatch are errors → core `reviewer_error` → task deactivated, never approved. The prompt forbids file and Git mutation; CCC Review itself only runs read-only `git` for the baseline.
+`codex exec --sandbox read-only -c approval_policy="never" --cd <root> --ephemeral --color never --output-schema <strict schema> --output-last-message <file> -`, spawned as executable + argv, prompt on stdin, stdout ignored, stderr tail (4 KB) kept for messages. Codex runs in its own process group; at the deadline (default 20 min, `CCC_REVIEW_CODEX_TIMEOUT_MS`) the whole group is SIGKILLed and the review fails immediately, without waiting for streams to close, and a result arriving later is ignored. Missing binary, non-zero exit (incl. auth), timeout, missing/empty/invalid JSON output and shape mismatch are errors → core `reviewer_error` → task deactivated, never approved. The prompt forbids file and Git mutation; CCC Review itself only runs read-only `git` for the baseline.
 
-State lives in `CCCR_STATE_DIR` / `${CLAUDE_PLUGIN_DATA}` / `~/.cccr` (not inside `.git`, so the repository is never written): `tasks/`, `sessions/`, `claims/`.
+State lives in `CCC_REVIEW_STATE_DIR` / `${CLAUDE_PLUGIN_DATA}` / `~/.ccc-review` (not inside `.git`, so the repository is never written): `tasks/`, `sessions/`, `claims/`.
 
 ### Bugs found and fixed (with regression tests)
 
 - Node's `spawn({ timeout })` timer is only cleared on exit, so a spawn error (missing `codex`) kept the Stop hook process alive for the whole Codex timeout. Fixed with an own timer cleared on `error` and `close`; regression: `claude-workflow.test.ts` "missing codex binary fails fast" (verified to fail with the old code).
-- (Found in Codex review) The `UserPromptExpansion` matcher `cccr` is an exact-string match, so `/cccr:cccr` never reached the hook. Fixed to `^(cccr:)?cccr$`; regression: `claude-workflow.test.ts` evaluates the matcher by the documented rules for both names and unrelated commands, and the workflow test now dispatches commands through the matcher (both verified to fail with the old matcher).
+- (Found in Codex review) The `UserPromptExpansion` matcher `ccc-review` is an exact-string match, so `/ccc-review:ccc-review` never reached the hook. Fixed to `^(ccc-review:)?ccc-review$`; regression: `claude-workflow.test.ts` evaluates the matcher by the documented rules for both names and unrelated commands, and the workflow test now dispatches commands through the matcher (both verified to fail with the old matcher).
 - (Found in Codex review) The timeout waited for `close`, which a grandchild holding stderr delayed, and a parent exiting 0 after the deadline was approved. Fixed: settle-once with the deadline winning, process-group kill, stderr destroyed; regressions in `codex-reviewer.test.ts` "timeout is enforced when a grandchild holds stderr open" and "a result arriving after the deadline is not approval" (both reproduced the bug before the fix and assert the grandchild is killed).
 
 ### Tests added
@@ -282,5 +282,5 @@ State lives in `CCCR_STATE_DIR` / `${CLAUDE_PLUGIN_DATA}` / `~/.cccr` (not insid
 
 - No documented, stable access to Claude's plan (transcript format undocumented) → the plan is not sent.
 - Claude Code gives no completion event id; duplicates are identified by `last_assistant_message`, so an identical final message is not reviewed twice.
-- `command_name` format for plugin skills is not documented; `cccr` and `cccr:cccr` are both accepted.
+- `command_name` format for plugin skills is not documented; `ccc-review` and `ccc-review:ccc-review` are both accepted.
 - Installation into a real Claude Code session and a real Codex review are covered only by the documented manual smoke test (README), since they need credentials.

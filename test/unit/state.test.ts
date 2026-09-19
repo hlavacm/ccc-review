@@ -80,6 +80,7 @@ describe("state persistence", () => {
 				finding("CCC-002"),
 			),
 			lastError: "timeout",
+			lastFindingNumber: 5,
 		};
 		await saveState(join(dir, "nested", "dir"), s);
 		assert.deepEqual(await loadState(join(dir, "nested", "dir"), s.taskId), s);
@@ -157,6 +158,9 @@ describe("state persistence", () => {
 			],
 			["bad baseline head", json({ baseline: { ...baseline, headSha: 1 } })],
 			["numeric lastError", json({ lastError: 1 })],
+			["negative lastFindingNumber", json({ lastFindingNumber: -1 })],
+			["string lastFindingNumber", json({ lastFindingNumber: "3" })],
+			["fractional lastFindingNumber", json({ lastFindingNumber: 1.5 })],
 			[
 				"forged approval in lastResult",
 				json({
