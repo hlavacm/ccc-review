@@ -1,81 +1,16 @@
-import { chmod, readdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { FakeCodexLogin, FakeCodexStep } from "../fixtures/fake-codex.ts";
-import { makeTempDir, removeDir } from "./temp-dir.ts";
+import { type FakeCall, FakeCli } from "./fake-cli.ts";
 
 export type { FakeCodexLogin, FakeCodexStep };
+export type FakeCodexCall = FakeCall;
 
-export interface FakeCodexCall {
-	argv: string[];
-	stdin: string;
-	cwd: string;
-}
-
-const script = join(import.meta.dirname, "../fixtures/fake-codex.ts");
-
-/**
- * A real executable standing in for `codex`, run through the production
- * subprocess path. Steps are scripted per invocation.
- */
-export class FakeCodex {
-	readonly dir: string;
-	readonly bin: string;
-
-	private constructor(dir: string) {
-		this.dir = dir;
-		this.bin = join(dir, "codex");
-	}
-
+/** Fake `codex` executable; see test/fixtures/fake-codex.ts. */
+export class FakeCodex extends FakeCli<FakeCodexStep> {
 	static async create(...steps: FakeCodexStep[]): Promise<FakeCodex> {
-		const fake = new FakeCodex(await makeTempDir("cccr-fake-codex-"));
-		// Pin the Node binary running the tests; the fake inherits the env.
-		await writeFile(
-			fake.bin,
-			`#!/bin/sh\nFAKE_CODEX_DIR='${fake.dir}' exec '${process.execPath}' '${script}' "$@"\n`,
+		const fake = new FakeCodex(
+			await FakeCli.tempDir("cccr-fake-codex-"),
+			"codex",
 		);
-		await chmod(fake.bin, 0o755);
-		await fake.script(...steps);
-		return fake;
-	}
-
-	async script(...steps: FakeCodexStep[]): Promise<void> {
-		await writeFile(join(this.dir, "steps.json"), JSON.stringify(steps));
-	}
-
-	/** How `codex login status` answers from now on. */
-	async login(login: FakeCodexLogin): Promise<void> {
-		await writeFile(join(this.dir, "login.json"), JSON.stringify(login));
-	}
-
-	async loginCalls(): Promise<number> {
-		try {
-			return Number(await readFile(join(this.dir, "login-calls"), "utf8"));
-		} catch {
-			return 0;
-		}
-	}
-
-	/** Recorded `codex exec` invocations. */
-	async calls(): Promise<FakeCodexCall[]> {
-		const files = (await readdir(this.dir))
-			.filter((f) => /^call-\d+\.json$/.test(f))
-			.sort((a, b) => Number(a.slice(5, -5)) - Number(b.slice(5, -5)));
-		return Promise.all(
-			files.map(
-				async (f) =>
-					JSON.parse(
-						await readFile(join(this.dir, f), "utf8"),
-					) as FakeCodexCall,
-			),
-		);
-	}
-
-	/** Pid of the grandchild started by a `childSleepMs` step. */
-	async childPid(): Promise<number> {
-		return Number(await readFile(join(this.dir, "child.pid"), "utf8"));
-	}
-
-	async dispose(): Promise<void> {
-		await removeDir(this.dir);
+		return FakeCli.setup(fake, "fake-codex.ts", steps);
 	}
 }

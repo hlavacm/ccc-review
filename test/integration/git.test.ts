@@ -3,7 +3,12 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { captureBaseline, GitError, parsePorcelainZ } from "../../src/git.ts";
+import {
+	captureBaseline,
+	describeChanges,
+	GitError,
+	parsePorcelainZ,
+} from "../../src/git.ts";
 import { makeTempDir, removeDir } from "../helpers/temp-dir.ts";
 import { TemporaryGitRepository } from "../helpers/temp-git-repo.ts";
 
@@ -143,8 +148,134 @@ describe("captureBaseline (real temporary repositories)", () => {
 
 		const before = await snapshot();
 		await captureBaseline(repo.root);
-		await captureBaseline(repo.root);
+		await describeChanges(await captureBaseline(repo.root));
 		assert.deepEqual(await snapshot(), before);
+	});
+});
+
+describe("describeChanges (real temporary repositories)", () => {
+	let repo: TemporaryGitRepository;
+	beforeEach(async () => {
+		repo = await TemporaryGitRepository.create();
+	});
+	afterEach(() => repo.dispose());
+
+	it("lists commits, the diff since activation and untracked files", async () => {
+		await repo.commitFile("a.txt", "one\n");
+		await repo.commitFile("gone.txt", "bye\n");
+		const baseline = await captureBaseline(repo.root);
+		await repo.commitFile(
+			"b.txt",
+			"committed after activation\n",
+			"writer commit",
+		);
+		await repo.write("a.txt", "two\n");
+		repo.git("rm", "-q", "gone.txt");
+		await repo.write("dir/new file ü.txt", "untracked\n");
+
+		const text = await describeChanges(baseline);
+		assert.match(
+			text,
+			/Commits since activation[^\n]*\n[0-9a-f]+ writer commit/,
+		);
+		assert.match(text, /Untracked files[^\n]*\n {2}dir\/new file ü\.txt/);
+		assert.match(text, /-one\n\+two/);
+		assert.match(text, /\+committed after activation/);
+		assert.match(text, /deleted file mode[\s\S]*-bye/);
+		assert.match(text, new RegExp(`git diff ${baseline.headSha}`));
+	});
+
+	it("a clean tree has no changes", async () => {
+		await repo.commitFile("a.txt", "a\n");
+		const text = await describeChanges(await captureBaseline(repo.root));
+		assert.match(text, /Commits[^\n]*\n\(none\)/);
+		assert.match(text, /Untracked files[^\n]*\n\(none\)/);
+		assert.match(text, /\(empty\)$/);
+	});
+
+	it("a repository without commits shows staged and unstaged changes", async () => {
+		const baseline = await captureBaseline(repo.root);
+		await repo.write("s.txt", "staged\n");
+		repo.git("add", "s.txt");
+		await repo.write("s.txt", "staged\nand more\n");
+		await repo.write("u.txt", "untracked\n");
+		const text = await describeChanges(baseline);
+		assert.match(text, /\+staged/);
+		assert.match(text, /\+and more/);
+		assert.match(text, /Untracked files[^\n]*\n {2}u\.txt/);
+		assert.match(text, /Commits[^\n]*\n\(none\)/);
+	});
+
+	// Regression: with no commits at activation only staged + unstaged changes
+	// were diffed, so the writer's first commit vanished from the diff.
+	it("a first commit after activation without commits is in the diff", async () => {
+		const baseline = await captureBaseline(repo.root);
+		await repo.commitFile("first.txt", "committed content\n", "first commit");
+		await repo.write("first.txt", "committed content\nedited later\n");
+		await repo.write("second.txt", "staged\n");
+		repo.git("add", "second.txt");
+		const text = await describeChanges(baseline);
+		assert.match(text, /Commits[^\n]*\n[0-9a-f]+ first commit/);
+		assert.match(text, /\+committed content/);
+		assert.match(text, /\+edited later/);
+		assert.match(text, /\+staged/);
+		assert.match(text, /Changed files[^\n]*\n {2}first\.txt\n {2}second\.txt/);
+	});
+
+	// Regression: truncating the diff could cut every later file, and nothing
+	// else listed which files had changed.
+	it("lists every changed file even when the diff is truncated", async () => {
+		await repo.commitFile("a.txt", "a\n");
+		await repo.commitFile("z last.txt", "z\n");
+		const baseline = await captureBaseline(repo.root);
+		await repo.write("a.txt", "y".repeat(10_000));
+		await repo.write("z last.txt", "changed\n");
+		await repo.commitFile("new.txt", "n\n");
+		const text = await describeChanges(baseline, 3000);
+		assert.match(text, /diff truncated/);
+		assert.doesNotMatch(text, /\+changed/);
+		assert.match(
+			text,
+			/Changed files[^\n]*\n {2}a\.txt\n {2}new\.txt\n {2}z last\.txt\n/,
+		);
+	});
+
+	it("truncates an oversized diff with a note", async () => {
+		await repo.commitFile("big.txt", "x\n");
+		const baseline = await captureBaseline(repo.root);
+		await repo.write("big.txt", "y".repeat(10_000));
+		const text = await describeChanges(baseline, 2000);
+		assert.ok(text.length < 2200, String(text.length));
+		assert.match(
+			text,
+			/diff truncated: \d+ more characters; read the changed files directly/,
+		);
+	});
+
+	it("never runs external diff drivers or textconv filters", async () => {
+		// Inside the repository's own temp parent, which dispose() removes.
+		await repo.dispose();
+		repo = await TemporaryGitRepository.create("repo");
+		const marker = join(repo.root, "..", "ext-diff-ran");
+		const script = join(repo.root, "..", "ext-diff.sh");
+		await writeFile(script, `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
+		repo.git("config", "diff.external", script);
+		repo.git("config", "diff.t.textconv", script);
+		await repo.write(".gitattributes", "*.txt diff=t\n");
+		await repo.commitFile("a.txt", "a\n");
+		const baseline = await captureBaseline(repo.root);
+		await repo.write("a.txt", "b\n");
+		assert.match(await describeChanges(baseline), /-a\n\+b/);
+		await assert.rejects(stat(marker));
+	});
+
+	it("throws GitError when the activation commit is gone", async () => {
+		await repo.commitFile("a.txt", "a\n");
+		const baseline = await captureBaseline(repo.root);
+		await assert.rejects(
+			describeChanges({ ...baseline, headSha: "0".repeat(40) }),
+			GitError,
+		);
 	});
 });
 

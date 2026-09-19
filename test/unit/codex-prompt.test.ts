@@ -96,7 +96,10 @@ describe("buildReviewPrompt stabilization", () => {
 		);
 		assert.doesNotMatch(p, /git diff null/);
 		assert.match(p, /no commits at activation/);
-		assert.match(p, /`git log --oneline`/);
+		// Regression: only `git diff --cached` was suggested, which hides the
+		// content of commits the writer made after activation.
+		assert.match(p, /`git log -p`/);
+		assert.match(p, /`git diff HEAD`/);
 	});
 
 	it("caps the pre-existing dirty path list", () => {
@@ -173,5 +176,51 @@ describe("REVIEW_SCHEMA", () => {
 			"medium",
 			"low",
 		]);
+	});
+});
+
+describe("buildReviewPrompt with collected changes (reviewer without a shell)", () => {
+	it("embeds the changes and tells the reviewer not to run commands", () => {
+		const p = buildReviewPrompt(request(), { changes: "DIFF-TEXT" });
+		assert.match(p, /you cannot run commands/);
+		assert.match(p, /Read the changed and untracked files/);
+		assert.match(p, /Git changes since activation:\nDIFF-TEXT$/);
+		assert.doesNotMatch(p, /git diff abc123/);
+		// The rest of the contract is unchanged.
+		assert.match(p, /Do NOT modify, create or delete any files/);
+		assert.match(p, /Number new findings CCC-001/);
+	});
+
+	it("without changes the reviewer inspects Git itself, as before", () => {
+		assert.equal(
+			buildReviewPrompt(request(), {}),
+			buildReviewPrompt(request()),
+		);
+		assert.doesNotMatch(buildReviewPrompt(request()), /cannot run commands/);
+	});
+});
+
+describe("buildReviewPrompt language", () => {
+	it("answers in the language of the original task first", () => {
+		// A Czech task with an English report: the task decides.
+		const p = buildReviewPrompt(
+			request({ context: { task: "Přidej násobení", report: "Done." } }),
+		);
+		assert.match(
+			p,
+			/Write the summary and finding messages in the language of the original task;/,
+		);
+	});
+
+	it("uses the writer's report when there is no task", () => {
+		const p = buildReviewPrompt(request({ context: { report: "Hotovo." } }));
+		assert.match(p, /in the language of the writer's report;/);
+		assert.doesNotMatch(p, /original task/);
+	});
+
+	it("falls back to English when there is neither task nor report", () => {
+		const p = buildReviewPrompt(request());
+		assert.match(p, /Write the summary and finding messages in English/);
+		assert.doesNotMatch(p, /in the language of/);
 	});
 });

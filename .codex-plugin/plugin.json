@@ -1,0 +1,7 @@
+{
+	"name": "cccr",
+	"version": "0.1.0",
+	"description": "CCC Review: Claude Code independently reviews Codex's changes; findings go back to Codex in a bounded loop.",
+	"skills": "./codex/skills/",
+	"hooks": "./codex/hooks.json"
+}

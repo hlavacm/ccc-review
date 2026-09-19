@@ -33,6 +33,7 @@ describe("writerFeedback", () => {
 			}),
 			1,
 			3,
+			"codex",
 		);
 		assert.match(text, /round 1\/3/);
 		assert.match(text, /- CCC-001 \[high\] a\.ts:3: null deref/);
@@ -115,11 +116,43 @@ describe("findingLines", () => {
 			{ id: "CCC-001", severity: "low", message: "minor" },
 			{ id: "CCC-002", severity: "high", message: "major" },
 		);
-		const feedback = writerFeedback(r, 1, 3);
+		const feedback = writerFeedback(r, 1, 3, "codex");
 		assert.ok(feedback.indexOf("CCC-002") < feedback.indexOf("CCC-001"));
 		const msg =
 			stopOutput("max_rounds", state({ round: 3, lastResult: r }))
 				?.systemMessage ?? "";
 		assert.ok(msg.indexOf("CCC-002") < msg.indexOf("CCC-001"));
+	});
+});
+
+describe("texts for the Codex writer → Claude reviewer direction", () => {
+	const reverse = (extra: Partial<TaskState>): TaskState => ({
+		...createTaskState({
+			writer: "codex",
+			reviewer: "claude",
+			baseline: { root: "/r", headSha: null, branch: null, status: [] },
+		}),
+		...extra,
+	});
+
+	it("names Claude as the reviewer in feedback and messages", () => {
+		const block = stopOutput(
+			"changes_requested",
+			reverse({ round: 1, lastResult: changesRequested() }),
+		);
+		assert.equal(block?.decision, "block");
+		assert.match(block?.reason ?? "", /round 1\/3: Claude requested changes/);
+		assert.match(block?.reason ?? "", /Claude will review again/);
+		assert.doesNotMatch(block?.reason ?? "", /Codex/);
+		assert.match(
+			stopOutput("approved", reverse({ round: 1, lastResult: approved() }))
+				?.systemMessage ?? "",
+			/Claude APPROVED/,
+		);
+		const failed =
+			stopOutput("reviewer_error", reverse({ lastError: "boom" }))
+				?.systemMessage ?? "";
+		assert.match(failed, /Claude review FAILED — the change is NOT approved/);
+		assert.doesNotMatch(failed, /APPROVED/);
 	});
 });

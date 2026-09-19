@@ -8,6 +8,10 @@ process.env.GIT_CONFIG_NOSYSTEM = "1";
 process.env.GIT_CONFIG_COUNT = "1";
 process.env.GIT_CONFIG_KEY_0 = "core.excludesFile";
 process.env.GIT_CONFIG_VALUE_0 = "/dev/null";
-// A developer's CODEX_API_KEY switches the Codex login preflight off; the
-// deterministic suite must not depend on it. Smoke tests use the real key.
-if (process.env.CCCR_SMOKE !== "1") delete process.env.CODEX_API_KEY;
+// A developer's CODEX_API_KEY / ANTHROPIC_API_KEY switches the reviewer login
+// preflight off; the deterministic suite must not depend on it. Smoke tests
+// use the real keys.
+if (process.env.CCCR_SMOKE !== "1") {
+	delete process.env.CODEX_API_KEY;
+	delete process.env.ANTHROPIC_API_KEY;
+}

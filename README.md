@@ -224,6 +224,86 @@ claude --plugin-dir /path/to/cccr
 7. Press Esc while Codex is reviewing → no `codex` process left (`pgrep -fl "codex exec"`); `status` shows the round as aborted, `on` starts again.
 8. `/cccr:cccr off` mid-task → the next completion is not reviewed; `status` history ends with `off`.
 
+## Using CCC Review in Codex (Codex writer → Claude reviewer)
+
+Requirements: Node.js ≥ 22.18 on `PATH`, Git, Codex CLI with hooks (stable
+since the `hooks` feature became default) and an authenticated Claude Code
+CLI (`claude auth login`, or `ANTHROPIC_API_KEY`).
+
+### Install locally
+
+The repository is also a Codex plugin (`.codex-plugin/plugin.json`, which
+Codex prefers over `.claude-plugin/`). Codex reads the bundled marketplace:
+
+```sh
+codex plugin marketplace add /path/to/cccr
+codex plugin add cccr
+```
+
+Codex does not run plugin hooks until you trust them: open `/hooks` in Codex
+and approve the CCCR `UserPromptSubmit` and `Stop` hooks (again after every
+update that changes them).
+
+### Use
+
+Codex has no plugin slash commands; the command is the `$cccr` skill mention,
+which the `UserPromptSubmit` hook handles and blocks (it never reaches the
+model):
+
+```text
+$cccr on [task description]   # check Claude, record Git baseline, arm review
+$cccr status                  # state, round n/3, reviewer settings, history
+$cccr off                     # disarm
+```
+
+`$cccr:cccr …` works too. Every time Codex finishes a turn, the `Stop` hook
+runs one Claude review round: `APPROVED` lets Codex stop; `CHANGES_REQUESTED`
+returns `{"decision":"block","reason":…}`, which Codex turns into a
+continuation prompt with the findings; `NEEDS_HUMAN`, 3 rounds, or any Claude
+failure stop the review with a message, never as approval.
+
+Claude is invoked as executable + argv, prompt on stdin, after a
+`claude auth status` check (with `ANTHROPIC_API_KEY` only `claude --version`):
+
+```text
+claude -p --safe-mode --no-session-persistence --output-format json --json-schema <schema> \
+  --tools Read,Grep,Glob --permission-mode dontAsk --permission-prompts none [--model M] [--effort E]
+```
+
+The reviewer has only file-reading tools, no shell, so CCCR collects the Git
+changes itself (read-only `git log`, the full list of changed files,
+`git diff --no-ext-diff --no-textconv` against the activation HEAD, or the
+empty tree when there were no commits, and untracked files; the diff is
+capped at 200 000 characters)
+and puts them in the prompt. `--safe-mode` loads no CLAUDE.md, plugins, hooks
+or MCP servers, so the nested Claude cannot re-enter CCCR's own Claude Code
+hooks. The result is `structured_output` of the JSON result; any error
+subtype, `is_error`, missing structured output, non-zero exit, timeout
+(process group killed) or invalid review fails the round.
+
+Configuration (environment of the shell that starts Codex):
+
+| Variable | Default |
+| --- | --- |
+| `CCCR_CLAUDE_BIN` | `claude` |
+| `CCCR_CLAUDE_TIMEOUT_MS` | `1200000` (20 min; the Stop hook allows 30) |
+| `CCCR_CLAUDE_MODEL` | Claude Code's configured model (`--model`) |
+| `CCCR_CLAUDE_EFFORT` | Claude Code's default; `low`, `medium`, `high`, `xhigh`, `max` |
+| `CCCR_MAX_ROUNDS` | `3` (read at `on`) |
+| `CCCR_STATE_DIR` | `${PLUGIN_DATA}`, else `~/.cccr` |
+
+### Known limitations
+
+- Whether the Codex TUI delivers a plugin skill mention as the literal text
+  `$cccr` / `$cccr:cccr` is not documented; if the hook does not handle it, the
+  `cccr` skill tells you review was NOT enabled.
+- The manifest's `hooks` path replaces Codex's default `hooks/hooks.json`
+  discovery, so Codex never loads the Claude Code hooks. Tasks also record
+  their writer and each host only drives its own, so a shared state directory
+  (`CCCR_STATE_DIR`) is safe.
+- A completion is identified by `turn_id` + final message: an identical message
+  redelivered for the same turn is not reviewed twice.
+
 ## Development
 
 Requires Node.js ≥ 22.18 and Git.
@@ -234,7 +314,7 @@ pnpm test                 # all deterministic tests (no credentials, no network)
 pnpm test:unit
 pnpm test:integration # real temporary Git repositories
 pnpm test:coverage
-pnpm test:smoke       # opt-in, real Codex (credentials, usage)
+pnpm test:smoke       # opt-in, real Codex and Claude (credentials, usage)
 pnpm typecheck
 pnpm lint             # Biome lint + format check; `pnpm format` to fix
 pnpm build            # emits dist/
