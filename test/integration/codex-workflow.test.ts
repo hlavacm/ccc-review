@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { delimiter, dirname, join } from "node:path";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { loadState, readHistory } from "../../src/core/state.ts";
 import { DEFAULT_CLAUDE_TIMEOUT_MS } from "../../src/reviewers/claude.ts";
@@ -11,6 +11,11 @@ import {
 	changesRequested,
 	finding,
 } from "../helpers/fake-reviewer.ts";
+import {
+	hookCommand as hookCommand_,
+	readHooks,
+	runHookCommand,
+} from "../helpers/plugin-hooks.ts";
 import { makeTempDir, removeDir } from "../helpers/temp-dir.ts";
 import { TemporaryGitRepository } from "../helpers/temp-git-repo.ts";
 
@@ -19,19 +24,8 @@ const manifest = JSON.parse(
 	readFileSync(join(pluginRoot, ".codex-plugin/plugin.json"), "utf8"),
 ) as { name: string; skills: string; hooks: string };
 
-interface HookEntry {
-	matcher?: string;
-	hooks: { type: string; command: string; timeout?: number }[];
-}
-const hooksJson = JSON.parse(
-	readFileSync(join(pluginRoot, manifest.hooks), "utf8"),
-) as { hooks: Record<string, HookEntry[]> };
-
-function hookCommand(event: string): string {
-	const command = hooksJson.hooks[event]?.[0]?.hooks[0]?.command;
-	assert.ok(command, `no ${event} hook`);
-	return command;
-}
+const hooksJson = readHooks(pluginRoot, manifest.hooks);
+const hookCommand = (event: string) => hookCommand_(hooksJson, event);
 
 async function waitFor<T>(probe: () => Promise<T | undefined>): Promise<T> {
 	for (let i = 0; i < 200; i++) {
@@ -42,34 +36,19 @@ async function waitFor<T>(probe: () => Promise<T | undefined>): Promise<T> {
 	assert.fail("condition not reached");
 }
 
-/**
- * Runs a hook exactly as registered in codex/hooks.json, the way Codex does:
- * the command line via a shell with the plugin's PLUGIN_ROOT/PLUGIN_DATA in
- * the environment, the payload on stdin, the session cwd as working dir.
- */
-function runPluginHook(
+/** Runs a hook exactly as registered in codex/hooks.json, in the session cwd. */
+const runPluginHook = (
 	event: string,
 	payload: { cwd: string; [key: string]: unknown },
 	env: Record<string, string>,
-): Record<string, unknown> | undefined {
-	const run = spawnSync("/bin/sh", ["-c", hookCommand(event)], {
-		input: JSON.stringify(payload),
-		cwd: payload.cwd,
-		encoding: "utf8",
-		timeout: 30_000,
-		env: {
-			...process.env,
-			// `node` in the hook command resolves to the Node running the tests.
-			PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH}`,
-			PLUGIN_ROOT: pluginRoot,
-			CLAUDE_PLUGIN_ROOT: pluginRoot,
-			...env,
-		},
-	});
-	assert.equal(run.error, undefined, `hook did not finish: ${run.error}`);
-	assert.equal(run.status, 0, run.stderr);
-	return run.stdout.trim() === "" ? undefined : JSON.parse(run.stdout);
-}
+) =>
+	runHookCommand(
+		hookCommand(event),
+		pluginRoot,
+		JSON.stringify(payload),
+		env,
+		payload.cwd,
+	);
 
 describe("Codex plugin manifest", () => {
 	it("points at an existing hooks file and skill", () => {
@@ -106,9 +85,7 @@ describe("Codex plugin manifest", () => {
 	});
 
 	it("does not replace the Claude Code plugin", () => {
-		const claudeHooks = JSON.parse(
-			readFileSync(join(pluginRoot, "hooks/hooks.json"), "utf8"),
-		) as { hooks: Record<string, HookEntry[]> };
+		const claudeHooks = readHooks(pluginRoot, "hooks/hooks.json");
 		assert.ok(claudeHooks.hooks.UserPromptExpansion);
 		assert.ok(
 			existsSync(join(pluginRoot, ".claude-plugin/plugin.json")),
@@ -277,20 +254,12 @@ describe("Codex → Claude workflow through the plugin hooks", () => {
 	});
 
 	it("garbage stdin and bad config never block or crash the hook", () => {
-		const run = spawnSync("/bin/sh", ["-c", hookCommand("Stop")], {
-			input: "garbage",
-			encoding: "utf8",
-			env: {
-				...process.env,
-				PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH}`,
-				PLUGIN_ROOT: pluginRoot,
-				PLUGIN_DATA: stateDir,
-				CCCR_CLAUDE_TIMEOUT_MS: "soon",
-			},
+		const out = runHookCommand(hookCommand("Stop"), pluginRoot, "garbage", {
+			PLUGIN_DATA: stateDir,
+			CCCR_CLAUDE_TIMEOUT_MS: "soon",
 		});
-		assert.equal(run.status, 0);
-		const out = JSON.parse(run.stdout);
+		assert.ok(out);
 		assert.deepEqual(Object.keys(out), ["systemMessage"]);
-		assert.match(out.systemMessage, /CCC Review error/);
+		assert.match(String(out.systemMessage), /CCC Review error/);
 	});
 });

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { delimiter, dirname, join } from "node:path";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { loadState, readHistory } from "../../src/core/state.ts";
 import { DEFAULT_CODEX_TIMEOUT_MS } from "../../src/reviewers/codex.ts";
@@ -11,6 +11,11 @@ import {
 	changesRequested,
 	finding,
 } from "../helpers/fake-reviewer.ts";
+import {
+	hookCommand as hookCommand_,
+	readHooks,
+	runHookCommand,
+} from "../helpers/plugin-hooks.ts";
 import { makeTempDir, removeDir } from "../helpers/temp-dir.ts";
 import { TemporaryGitRepository } from "../helpers/temp-git-repo.ts";
 
@@ -36,19 +41,8 @@ async function assertGone(pid: number): Promise<void> {
 	});
 }
 
-interface HookEntry {
-	matcher?: string;
-	hooks: { type: string; command: string; timeout?: number }[];
-}
-const hooksJson = JSON.parse(
-	readFileSync(join(pluginRoot, "hooks/hooks.json"), "utf8"),
-) as { hooks: Record<string, HookEntry[]> };
-
-function hookCommand(event: string): string {
-	const command = hooksJson.hooks[event]?.[0]?.hooks[0]?.command;
-	assert.ok(command, `no ${event} hook`);
-	return command;
-}
+const hooksJson = readHooks(pluginRoot, "hooks/hooks.json");
+const hookCommand = (event: string) => hookCommand_(hooksJson, event);
 
 /**
  * Claude Code's documented matcher rules (hooks reference, "Matcher
@@ -61,29 +55,9 @@ function claudeCodeMatches(matcher: string, value: string): boolean {
 	return new RegExp(matcher).test(value);
 }
 
-const PLUGIN_ROOT_VAR = "$" + "{CLAUDE_PLUGIN_ROOT}";
-
-/**
- * Runs a hook exactly as registered in hooks/hooks.json, the way Claude Code
- * does: the command line via a shell, the payload on stdin.
- */
-function spawnHook(event: string, stdin: string, env: Record<string, string>) {
-	const command = hookCommand(event).replaceAll(PLUGIN_ROOT_VAR, pluginRoot);
-	const run = spawnSync("/bin/sh", ["-c", command], {
-		input: stdin,
-		encoding: "utf8",
-		timeout: 30_000,
-		env: {
-			...process.env,
-			// `node` in the hook command resolves to the Node running the tests.
-			PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH}`,
-			...env,
-		},
-	});
-	assert.equal(run.error, undefined, `hook did not finish: ${run.error}`);
-	assert.equal(run.status, 0, run.stderr);
-	return run.stdout.trim() === "" ? undefined : JSON.parse(run.stdout);
-}
+/** Runs a hook exactly as registered in hooks/hooks.json. */
+const spawnHook = (event: string, stdin: string, env: Record<string, string>) =>
+	runHookCommand(hookCommand(event), pluginRoot, stdin, env);
 
 const runPluginHook = (
 	event: string,
@@ -391,7 +365,7 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 			CCCR_STATE_DIR: stateDir,
 			CCCR_CODEX_TIMEOUT_MS: "soon",
 		});
-		assert.equal(out.decision, undefined);
-		assert.match(out.systemMessage, /CCC Review error/);
+		assert.equal(out?.decision, undefined);
+		assert.match(String(out?.systemMessage), /CCC Review error/);
 	});
 });
