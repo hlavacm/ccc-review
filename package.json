@@ -1,0 +1,27 @@
+{
+	"name": "cccr",
+	"version": "0.0.0",
+	"private": true,
+	"description": "CCC Review — Claude Code ↔ Codex Review",
+	"type": "module",
+	"engines": {
+		"node": ">=22.18"
+	},
+	"scripts": {
+		"test": "node --import ./test/setup.ts --test \"test/**/*.test.ts\"",
+		"test:all": "pnpm test",
+		"test:unit": "node --import ./test/setup.ts --test \"test/unit/**/*.test.ts\"",
+		"test:integration": "node --import ./test/setup.ts --test \"test/integration/**/*.test.ts\"",
+		"test:coverage": "node --import ./test/setup.ts --test --experimental-test-coverage --test-coverage-exclude=\"test/**\" \"test/**/*.test.ts\"",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome check .",
+		"format": "biome format --write .",
+		"build": "tsc -p tsconfig.build.json",
+		"check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.14",
+		"@types/node": "^26.6.2",
+		"typescript": "^7.0.2"
+	}
+}

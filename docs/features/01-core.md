@@ -2,7 +2,7 @@
 
 ## Status
 
-TODO
+DONE
 
 ## Objective
 
@@ -94,17 +94,17 @@ Do not mock all Git behavior.
 
 ## Acceptance criteria
 
-- [ ] Project builds.
-- [ ] Deterministic test suite runs without credentials/network.
-- [ ] Strict type checking passes.
-- [ ] Lint/format checks pass.
-- [ ] Core has no Claude Code or Codex dependency.
-- [ ] A fake reviewer can drive approval, changes requested, needs human, and max rounds.
-- [ ] Reviewer execution/error state cannot become approval.
-- [ ] Git helper is tested in real temporary clean and dirty repositories.
-- [ ] Review state can be saved and loaded.
-- [ ] Corrupt state behavior is tested.
-- [ ] New behavior has automated coverage as required by `docs/testing.md`.
+- [x] Project builds.
+- [x] Deterministic test suite runs without credentials/network.
+- [x] Strict type checking passes.
+- [x] Lint/format checks pass.
+- [x] Core has no Claude Code or Codex dependency.
+- [x] A fake reviewer can drive approval, changes requested, needs human, and max rounds.
+- [x] Reviewer execution/error state cannot become approval.
+- [x] Git helper is tested in real temporary clean and dirty repositories.
+- [x] Review state can be saved and loaded.
+- [x] Corrupt state behavior is tested.
+- [x] New behavior has automated coverage as required by `docs/testing.md`.
 
 ## Non-goals
 
@@ -120,3 +120,11 @@ Summarize:
 - automated tests added,
 - failure paths covered,
 - commands run and results.
+
+## Implementation notes
+
+- Toolchain: Node ≥ 22.18 (native TypeScript type stripping), `node:test`, TypeScript (strict, `erasableSyntaxOnly`), Biome (lint + format). Dev dependencies only.
+- `src/core/types.ts` — `Verdict`, `Finding`, `ReviewResult`, `GitBaseline`, `ReviewRequest`, `Reviewer`, strict `parseReviewResult()`.
+- `src/core/review-loop.ts` — `runReviewRound(state, reviewer)`: one round per writer completion; outcomes `approved | changes_requested | needs_human | max_rounds | reviewer_error | inactive`. Every reviewer call increments `round`; any reviewer throw or invalid output becomes `reviewer_error` and deactivates the task.
+- `src/core/state.ts` — `TaskState` (version 1), `createTaskState()`, `saveState(dir, state)` (atomic tmp + rename to `<dir>/<taskId>.json`), `loadState(dir, taskId)` (`undefined` when missing, `StateError` when corrupt). The state directory is chosen by the host (planned for 02: `<git-common-dir>/cccr/`).
+- `src/git.ts` — `captureBaseline(cwd)`: root, HEAD SHA (`null` without commits), branch (`null` when detached), parsed `git status --porcelain=v1 -z`. Runs `git` via argv only with `--no-optional-locks` so it never rewrites the index.

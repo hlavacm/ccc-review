@@ -49,3 +49,19 @@ automated test suite, typecheck, lint, and build all succeed.
 ```
 
 Start with `docs/features/01-core.md`.
+
+## Development
+
+Requires Node.js ≥ 22.18 and Git.
+
+```sh
+pnpm install
+pnpm test                 # all deterministic tests (no credentials, no network)
+pnpm test:unit
+pnpm test:integration # real temporary Git repositories
+pnpm test:coverage
+pnpm typecheck
+pnpm lint             # Biome lint + format check; `pnpm format` to fix
+pnpm build            # emits dist/
+pnpm check            # typecheck + lint + test + build
+```

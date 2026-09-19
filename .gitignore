@@ -45,3 +45,8 @@ $RECYCLE.BIN/
 
 # NFS temporary files
 .nfs*
+
+### Project
+node_modules/
+dist/
+coverage/
