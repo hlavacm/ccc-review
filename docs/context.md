@@ -1,8 +1,8 @@
-# CCC Review — MVP Context
+# CCCR — MVP Context
 
 ## Name
 
-**CCC Review**
+**CCCR**
 
 Expanded name:
 
@@ -12,7 +12,7 @@ Expanded name:
 
 ## Purpose
 
-CCC Review automates a workflow that already works manually:
+CCCR automates a workflow that already works manually:
 
 1. one coding agent plans and implements a task,
 2. another coding agent independently reviews the real repository changes,
@@ -257,7 +257,7 @@ Each such failure path should have deterministic automated coverage.
 
 ## Explicit activation
 
-CCC Review must not run for every session by default.
+CCCR must not run for every session by default.
 
 Use an explicit host-native activation mechanism.
 

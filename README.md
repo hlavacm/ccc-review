@@ -1,8 +1,8 @@
-# CCC Review MVP specification
+# CCCR MVP specification
 
-This archive contains the simplified, test-heavy implementation specification for **CCC Review**.
+This archive contains the simplified, test-heavy implementation specification for **CCCR**.
 
-CCC Review = **Claude Code ↔ Codex Review**.
+CCCR = **Claude Code ↔ Codex Review**.
 
 The MVP intentionally prioritizes a small architecture and a strong automated test suite.
 
@@ -13,7 +13,7 @@ Claude Code writer
     ↓
 Claude finishes
     ↓
-CCC Review completion hook
+CCCR completion hook
     ↓
 Codex read-only review
     ↓

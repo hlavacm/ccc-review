@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-CCC Review (Claude Code ↔ Codex Review): one coding agent writes, the other independently reviews real repository changes, and findings go back to the writer in a bounded loop. The first milestone is Claude Code writer → Codex reviewer; the reverse direction comes later.
+CCCR (Claude Code ↔ Codex Review): one coding agent writes, the other independently reviews real repository changes, and findings go back to the writer in a bounded loop. The first milestone is Claude Code writer → Codex reviewer; the reverse direction comes later.
 
 The spec in `docs/` is normative, and `docs/testing.md` governs testing. Development goes feature by feature through `docs/features/0N-*.md`, in numeric order. Before implementing, read `docs/README.md`, `docs/context.md`, `docs/testing.md` and the whole feature file. Implement only that feature and do not continue to the next one automatically. Mark a feature `DONE` only when its acceptance criteria pass and every relevant success and failure path has automated coverage.
 

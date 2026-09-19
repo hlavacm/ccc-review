@@ -2,7 +2,7 @@
 	"name": "cccr",
 	"version": "0.0.0",
 	"private": true,
-	"description": "CCC Review — Claude Code ↔ Codex Review",
+	"description": "CCCR — Claude Code ↔ Codex Review",
 	"type": "module",
 	"engines": {
 		"node": ">=22.18"

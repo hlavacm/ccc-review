@@ -26,7 +26,7 @@ Both host integrations must be installable and documented, and the deterministic
 The root README should clearly say:
 
 ```text
-CCC Review
+CCCR
 Claude Code ↔ Codex Review
 
 Use Claude Code to implement and Codex to review,
@@ -74,7 +74,7 @@ Document that reviewer context may include:
 Explain:
 
 - reviewer is configured as read-only for source code,
-- CCC Review does not auto-commit/reset/stash/push,
+- CCCR does not auto-commit/reset/stash/push,
 - reviewer failures do not count as approval.
 
 ### Configuration

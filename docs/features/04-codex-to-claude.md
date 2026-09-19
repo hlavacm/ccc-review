@@ -114,7 +114,7 @@ The test suite must prove that adding the reverse direction did not regress Clau
 
 ## Acceptance criteria
 
-- [ ] Codex can explicitly enable CCC Review for a task.
+- [ ] Codex can explicitly enable CCCR for a task.
 - [ ] Codex implementation completion invokes one logical Claude review round.
 - [ ] Claude reviewer is source-code read-only.
 - [ ] Approval ends the loop.

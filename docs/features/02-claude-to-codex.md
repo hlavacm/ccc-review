@@ -6,7 +6,7 @@ TODO
 
 ## Objective
 
-Deliver the first genuinely useful CCC Review workflow:
+Deliver the first genuinely useful CCCR workflow:
 
 > Claude Code implements → Codex reviews → feedback returns to Claude → bounded re-review loop.
 
