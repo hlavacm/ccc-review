@@ -162,14 +162,14 @@ tmp=$(mktemp -d) && cd "$tmp" && git init -q && printf 'export const add = (a, b
 claude --plugin-dir /path/to/ccc-review
 ```
 
-1. `/ccc-review:ccc-review on Fix add() in math.js and add a node:test test for it` → "enabled", baseline shown.
+1. `/ccc-review:on Fix add() in math.js and add a node:test test for it` → "enabled", baseline shown.
 2. Ask Claude to do the task. When it finishes, Codex reviews (may take minutes).
 3. Expect either an approval message, or Claude continuing with `CCC-00x` findings and a re-review.
-4. `/ccc-review:ccc-review status` shows the round and last verdict; `git status` shows only Claude's edits (no commits or stashes by CCC Review).
+4. `/ccc-review:status` shows the round and last verdict; `git status` shows only Claude's edits (no commits or stashes by CCC Review).
 5. Failure path: `CCC_REVIEW_CODEX_BIN=/nonexistent claude --plugin-dir /path/to/ccc-review`, then `on` → "not enabled: codex executable not found".
 6. Commit during the task (ask Claude to commit) → Codex still reviews the committed change.
 7. Press Esc while Codex is reviewing → no `codex` process left (`pgrep -fl "codex exec"`); `status` shows the round as aborted, `on` starts again.
-8. `/ccc-review:ccc-review off` mid-task → the next completion is not reviewed; the `status` history ends with `off`.
+8. `/ccc-review:off` mid-task → the next completion is not reviewed; the `status` history ends with `off`.
 
 When all eight pass, record the date here, tick the last acceptance criterion and set the status to `DONE`.
 

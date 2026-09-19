@@ -84,7 +84,7 @@ export function copyPackage(root: string, dest: string): void {
 
 /**
  * Through the hooks of the plugin installed at `pluginRoot`: turns review on
- * in `repo` (Claude Code `/ccc-review:ccc-review on`, Codex `$ccc-review on`), lets the writer
+ * in `repo` (Claude Code `/ccc-review:on`, Codex `$ccc-review on`), lets the writer
  * change a file and finish, and returns the Stop hook's output.
  */
 export async function completeArmedTurn(
@@ -126,10 +126,10 @@ export async function completeArmedTurn(
 		host === "claude"
 			? run("UserPromptExpansion", {
 					expansion_type: "slash_command",
-					command_name: "ccc-review:ccc-review",
-					command_args: "on make x 2",
+					command_name: "ccc-review:on",
+					command_args: "make x 2",
 					command_source: "plugin",
-					prompt: "/ccc-review:ccc-review on make x 2",
+					prompt: "/ccc-review:on make x 2",
 				})
 			: run("UserPromptSubmit", { prompt: "$ccc-review on make x 2" });
 	assert.match(String(on?.reason), /enabled/);

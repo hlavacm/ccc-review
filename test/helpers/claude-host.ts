@@ -36,18 +36,21 @@ export class ClaudeHostHarness {
 		};
 	}
 
-	/** `/ccc-review:ccc-review <args>` typed by the user. */
-	command(
-		args: string,
-		commandName = "ccc-review:ccc-review",
-	): Promise<HookOutput | undefined> {
+	/**
+	 * `/ccc-review:<action> [task]` typed by the user, given as "<action> [task]"
+	 * (the form both hosts share). `commandName` sends another command instead.
+	 */
+	command(args: string, commandName?: string): Promise<HookOutput | undefined> {
+		const [action = "", ...rest] = args.split(" ");
+		const name = commandName ?? `ccc-review:${action}`;
+		const commandArgs = commandName === undefined ? rest.join(" ") : args;
 		return this.send("command", {
 			...this.common("UserPromptExpansion"),
 			expansion_type: "slash_command",
-			command_name: commandName,
-			command_args: args,
+			command_name: name,
+			command_args: commandArgs,
 			command_source: "plugin",
-			prompt: `/${commandName} ${args}`,
+			prompt: `/${name} ${commandArgs}`.trim(),
 		});
 	}
 

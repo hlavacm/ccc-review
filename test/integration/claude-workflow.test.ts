@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { loadState, readHistory } from "../../src/core/state.ts";
@@ -60,7 +60,7 @@ const runPluginHook = (
 };
 
 describe("plugin manifest", () => {
-	it("plugin.json, marketplace and skill exist and are well-formed", () => {
+	it("plugin.json and marketplace exist and are well-formed", () => {
 		const plugin = JSON.parse(
 			readFileSync(join(pluginRoot, ".claude-plugin/plugin.json"), "utf8"),
 		);
@@ -70,14 +70,6 @@ describe("plugin manifest", () => {
 		);
 		assert.equal(market.plugins[0].name, "ccc-review");
 		assert.equal(market.plugins[0].source, "./");
-		const skill = readFileSync(
-			join(pluginRoot, "skills/ccc-review/SKILL.md"),
-			"utf8",
-		);
-		assert.match(
-			skill,
-			/^---\n[\s\S]*disable-model-invocation: true[\s\S]*\n---\n/,
-		);
 	});
 
 	it("hooks point at existing entry points with expected events", () => {
@@ -93,22 +85,45 @@ describe("plugin manifest", () => {
 		}
 	});
 
-	// Regression: the bare `ccc-review` matcher is an exact-string match in Claude
-	// Code, so the namespaced `/ccc-review:ccc-review` never reached the command hook.
-	it("command matcher selects both command names and nothing else", () => {
+	// Regression: a matcher of plain characters is an exact-string match in
+	// Claude Code, and the command name always arrives namespaced, so a bare
+	// matcher never reached the command hook. With `:` it is an (unanchored)
+	// regex and must anchor itself.
+	it("command matcher selects the three commands and nothing else", () => {
 		const matcher = hooksJson.hooks.UserPromptExpansion?.[0]?.matcher;
 		assert.ok(matcher);
-		for (const name of ["ccc-review", "ccc-review:ccc-review"])
+		for (const name of ["ccc-review:on", "ccc-review:off", "ccc-review:status"])
 			assert.ok(claudeCodeMatches(matcher, name), name);
 		for (const name of [
 			"deploy",
-			"ccc-review:on",
-			"other:ccc-review",
-			"ccc-reviewx",
-			"myccc-review",
-			"ccc-review-x",
+			"on",
+			"status",
+			"ccc-review",
+			"ccc-review:ccc-review",
+			"ccc-review:online",
+			"other:on",
+			"xccc-review:on",
+			"ccc-review:status-x",
 		])
 			assert.ok(!claudeCodeMatches(matcher, name), name);
+	});
+
+	it("every command the matcher selects has a skill, and the reverse", () => {
+		const skills = readdirSync(join(pluginRoot, "skills")).sort();
+		assert.deepEqual(skills, ["off", "on", "status"]);
+		for (const skill of skills) {
+			const body = readFileSync(
+				join(pluginRoot, "skills", skill, "SKILL.md"),
+				"utf8",
+			);
+			// The model must never be able to turn review on or off by itself.
+			assert.match(
+				body,
+				/^---\n[\s\S]*disable-model-invocation: true[\s\S]*\n---\n/,
+				skill,
+			);
+			assert.match(body, /NOT/, skill);
+		}
 	});
 
 	it("matcher evaluation follows the documented rules", () => {
@@ -175,10 +190,10 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 			{
 				...base("UserPromptExpansion"),
 				expansion_type: "slash_command",
-				command_name: "ccc-review:ccc-review",
-				command_args: "on",
+				command_name: "ccc-review:on",
+				command_args: "",
 				command_source: "plugin",
-				prompt: "/ccc-review:ccc-review on",
+				prompt: "/ccc-review:on",
 			},
 			env,
 		);
@@ -239,8 +254,8 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 			"UserPromptExpansion",
 			{
 				...base("UserPromptExpansion"),
-				command_name: "ccc-review:ccc-review",
-				command_args: "on",
+				command_name: "ccc-review:on",
+				command_args: "",
 			},
 			env,
 		);
@@ -267,8 +282,8 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 			"UserPromptExpansion",
 			{
 				...base("UserPromptExpansion"),
-				command_name: "ccc-review:ccc-review",
-				command_args: "on",
+				command_name: "ccc-review:on",
+				command_args: "",
 			},
 			env,
 		);
@@ -331,8 +346,8 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 			"UserPromptExpansion",
 			{
 				...base("UserPromptExpansion"),
-				command_name: "ccc-review:ccc-review",
-				command_args: "on",
+				command_name: "ccc-review:on",
+				command_args: "",
 			},
 			env,
 		);

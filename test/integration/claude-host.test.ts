@@ -66,8 +66,20 @@ describe("Claude Code host", () => {
 	};
 
 	describe("inactive session", () => {
-		it("other slash commands are ignored", async () => {
-			assert.equal(await host.command("on", "deploy"), undefined);
+		// Observed in Claude Code 2.1.278: a plugin skill always arrives as
+		// `<plugin>:<skill>`; a bare `on` or `status` is someone else's command.
+		it("other commands are ignored, including bare and look-alike names", async () => {
+			for (const name of [
+				"deploy",
+				"on",
+				"status",
+				"ccc-review",
+				"ccc-review:ccc-review",
+				"ccc-review:bogus",
+				"other:on",
+				"ccc-review:on ",
+			])
+				assert.equal(await host.command("on", name), undefined, name);
 			assert.equal(await host.taskId(), undefined);
 		});
 
@@ -101,9 +113,16 @@ describe("Claude Code host", () => {
 			]);
 		});
 
-		it("accepts the bare command name too", async () => {
-			await host.command("on", "ccc-review");
-			assert.equal((await host.state())?.active, true);
+		it("off and status ignore trailing arguments", async () => {
+			await host.command("on");
+			assert.match(
+				(await host.command("status now please"))?.reason ?? "",
+				/status: active/,
+			);
+			assert.match(
+				(await host.command("off thanks"))?.reason ?? "",
+				/disabled/,
+			);
 		});
 
 		it("outside a Git repository nothing is enabled", async () => {
@@ -134,13 +153,6 @@ describe("Claude Code host", () => {
 			assert.match(reason, /status: active/);
 			assert.match(reason, /round: 1\/3/);
 			assert.match(reason, /last verdict: CHANGES_REQUESTED/);
-		});
-
-		it("unknown action is reported", async () => {
-			assert.match(
-				(await host.command("bogus"))?.reason ?? "",
-				/unknown action/,
-			);
 		});
 
 		it("on after a finished task starts a fresh task", async () => {
@@ -174,7 +186,7 @@ describe("Claude Code host", () => {
 		it("slash commands are not recorded as the task", async () => {
 			await setup([{ output: approved() }]);
 			await host.command("on");
-			await host.prompt("/ccc-review:ccc-review status");
+			await host.prompt("/ccc-review:status");
 			await host.stop("done");
 			const [call] = await codex.calls();
 			assert.match(call?.stdin ?? "", /Writer's implementation report/);
@@ -229,8 +241,8 @@ describe("Claude Code host", () => {
 			const out = await host.send("command", {
 				session_id: "../x",
 				cwd: repo.root,
-				command_name: "ccc-review",
-				command_args: "on",
+				command_name: "ccc-review:on",
+				command_args: "",
 			});
 			assert.equal(out?.decision, "block");
 			assert.match(out?.reason ?? "", /invalid session_id/);

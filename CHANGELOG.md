@@ -11,7 +11,7 @@ First release.
 ### Added
 
 - **Claude Code writer → Codex reviewer**: a Claude Code plugin with the
-  `/ccc-review:ccc-review on|off|status` command. Every time Claude finishes a turn, a
+  `/ccc-review:on`, `/ccc-review:off` and `/ccc-review:status` commands. Every time Claude finishes a turn, a
   read-only `codex exec` reviews the real repository changes and the findings
   go back to Claude.
 - **Codex writer → Claude Code reviewer**: a Codex plugin with the

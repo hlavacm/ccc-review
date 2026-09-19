@@ -61,21 +61,36 @@ export function configFromEnv(env: NodeJS.ProcessEnv): HostConfig {
 	return config;
 }
 
-/** UserPromptExpansion: `/ccc-review:ccc-review on [task] | off | status`. */
+/**
+ * One skill per action, since Claude Code names a plugin skill
+ * `<plugin>:<skill>` and always reports it that way (observed in 2.1.278).
+ * A bare `on` or `status` is another command, e.g. the built-in `/status`.
+ */
+const COMMAND = /^ccc-review:(on|off|status)$/;
+
+/** UserPromptExpansion: `/ccc-review:on [task]`, `/ccc-review:off`, `/ccc-review:status`. */
 export async function handleCommand(
 	c: HostConfig,
 	input: HookInput,
 ): Promise<HookOutput | undefined> {
-	if (
-		input.command_name !== "ccc-review" &&
-		input.command_name !== "ccc-review:ccc-review"
-	)
-		return undefined;
-	const args =
-		typeof input.command_args === "string" ? input.command_args.trim() : "";
+	const action =
+		typeof input.command_name === "string" &&
+		COMMAND.exec(input.command_name)?.[1];
+	if (!action) return undefined;
+	// Only `on` takes arguments: the task description.
+	const task =
+		action === "on" && typeof input.command_args === "string"
+			? input.command_args.trim()
+			: "";
 	return {
 		decision: "block",
-		reason: await runCommand(c, ROLES, input.session_id, input.cwd, args),
+		reason: await runCommand(
+			c,
+			ROLES,
+			input.session_id,
+			input.cwd,
+			`${action} ${task}`.trim(),
+		),
 	};
 }
 

@@ -61,7 +61,7 @@ condition is reached.
    claude plugin install ccc-review@hlavacm
    ```
 
-2. Turn review on: `/ccc-review:ccc-review on Add multiply(a, b) to math.js with a test`.
+2. Turn review on: `/ccc-review:on Add multiply(a, b) to math.js with a test`.
    This only arms review and records the task for the reviewer; Claude does
    not start working.
 3. Ask Claude for the work in a normal message, for example
@@ -103,7 +103,7 @@ flowchart LR
 | --- | --- | --- |
 | **Writer** (you work with it) | Claude Code | Codex |
 | **Reviewer** (headless, read-only) | `codex exec --sandbox read-only` | `claude -p --tools Read,Grep,Glob` |
-| **Command** | `/ccc-review:ccc-review on\|off\|status` | `$ccc-review on\|off\|status` |
+| **Command** | `/ccc-review:on`, `/ccc-review:off`, `/ccc-review:status` | `$ccc-review on\|off\|status` |
 | **Trigger** | Claude Code `Stop` hook | Codex `Stop` hook |
 
 - **Writer**: plans, implements, and evaluates each finding: it fixes valid
@@ -181,16 +181,17 @@ not a development checkout with `node_modules/` or `dist/`.
 
 ### Claude → Codex
 
-Claude Code namespaces plugin commands, so the command is `/ccc-review:ccc-review`:
+Claude Code names a plugin command `/<plugin>:<command>`, so there is one
+command per action:
 
 ```text
-/ccc-review:ccc-review on [task description]   # check Codex, record Git baseline, arm review (does not start Claude)
-/ccc-review:ccc-review status                  # state, round n/3, reviewer settings, history, file paths
-/ccc-review:ccc-review off                     # disarm (also stops further rounds of this task)
+/ccc-review:on [task description]   # check Codex, record Git baseline, arm review (does not start Claude)
+/ccc-review:status                  # state, round n/3, reviewer settings, history, file paths
+/ccc-review:off                     # disarm (also stops further rounds of this task)
 ```
 
 ```text
-> /ccc-review:ccc-review on Add multiply(a, b) to math.js with a test
+> /ccc-review:on Add multiply(a, b) to math.js with a test
 CCC Review: enabled. Codex will review when Claude finishes.
 
 > Add multiply(a, b) to math.js with a test.
@@ -204,7 +205,7 @@ CCC Review: Codex APPROVED (round 2/3). multiply is correct and tested.
 
 To abort a running review, interrupt Claude (Esc). CCC Review kills the whole Codex
 process group, records the round as `reviewer_error` (not approved) and stops
-the task. `/ccc-review:ccc-review on` starts a fresh one.
+the task. `/ccc-review:on` starts a fresh one.
 
 ### Codex → Claude
 
@@ -369,7 +370,7 @@ review the changed hooks again in `/hooks`.
 
 ## Uninstall
 
-First run `/ccc-review:ccc-review off` or `$ccc-review off` in active sessions. The state
+First run `/ccc-review:off` or `$ccc-review off` in active sessions. The state
 directory is `CCC_REVIEW_STATE_DIR` if you set it, otherwise the plugin data
 directory (`${CLAUDE_PLUGIN_DATA}` for Claude Code, `${PLUGIN_DATA}` for Codex), otherwise
 `~/.ccc-review`; `status` of an enabled task prints the exact paths.
@@ -409,8 +410,10 @@ data directory, unless you set `CCC_REVIEW_STATE_DIR`).
   twice.
 - Files dirty before `on` are listed for the reviewer but not attributed line
   by line.
-- Claude Code does not document the exact `command_name` of a plugin skill,
-  so both `ccc-review` and `ccc-review:ccc-review` are accepted.
+- Claude Code does not document the `command_name` a hook gets for a plugin
+  skill. Claude Code 2.1.278 sends `ccc-review:on` (and nothing for built-in
+  commands such as `/status`), and that is what the hook accepts; if a later
+  version changes it, the skill tells you that review was NOT enabled.
 - Codex does not document whether the TUI delivers a skill mention as the
   literal `$ccc-review`. If the hook does not handle it, the `ccc-review` skill tells you
   that review was NOT enabled.
