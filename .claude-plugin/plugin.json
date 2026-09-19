@@ -1,0 +1,8 @@
+{
+	"name": "cccr",
+	"description": "CCC Review: Codex independently reviews Claude Code's changes; findings go back to Claude in a bounded loop.",
+	"version": "0.1.0",
+	"author": {
+		"name": "CCC Review"
+	}
+}

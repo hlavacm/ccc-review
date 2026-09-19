@@ -16,6 +16,12 @@ export interface Finding {
 	message: string;
 }
 
+/** One-line human/agent readable form, e.g. `CCC-001 [high] a.ts:3: msg`. */
+export function formatFinding(f: Finding): string {
+	const where = f.file ? ` ${f.file}${f.line ? `:${f.line}` : ""}` : "";
+	return `${f.id} [${f.severity}]${where}: ${f.message}`;
+}
+
 export interface ReviewResult {
 	verdict: Verdict;
 	summary: string;
@@ -45,6 +51,15 @@ export interface ReviewRequest {
 	round: number;
 	baseline: GitBaseline;
 	previous?: ReviewResult;
+	context?: ReviewContext;
+}
+
+/** Writer-side context the host can reliably supply. Never invented. */
+export interface ReviewContext {
+	/** Original user task. */
+	task?: string;
+	/** Writer's implementation report (e.g. its last message). */
+	report?: string;
 }
 
 export interface Reviewer {

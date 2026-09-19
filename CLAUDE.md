@@ -34,16 +34,18 @@ Always pass `--import ./test/setup.ts`. It isolates every git process, including
 
 ## Architecture
 
-- `src/core/` is the shared core and must stay host-agnostic. It may import only `node:*` builtins and sibling core modules; `test/unit/core-boundary.test.ts` enforces this. Claude Code / Codex hook or CLI code belongs outside core, in host and reviewer adapters (planned: `src/hosts/`, `src/reviewers/`).
+- `src/core/` is the shared core and must stay host-agnostic. It may import only `node:*` builtins and sibling core modules; `test/unit/core-boundary.test.ts` enforces this. Claude Code / Codex hook or CLI code belongs outside core, in host and reviewer adapters (`src/hosts/`, `src/reviewers/`).
   - `types.ts`: the review model (`Verdict`, `Finding`, `ReviewResult`, `GitBaseline`) and the `Reviewer` interface. `parseReviewResult()` strictly validates untrusted reviewer output.
-  - `review-loop.ts`: `runReviewRound(state, reviewer)` runs **one** round per writer completion; the host calls it from its completion hook. It is pure with respect to its input state, and the caller persists the returned state. Invariants:
+  - `review-loop.ts`: `runReviewRound(state, reviewer, context?)` runs **one** round per writer completion; the host calls it from its completion hook. It is pure with respect to its input state, and the caller persists the returned state. Invariants:
     - every reviewer call increments `round`, so the loop always terminates;
     - reviewer output is re-validated;
     - any throw or invalid output becomes `reviewer_error` and deactivates the task, never approval;
     - once `round >= maxRounds` (default 3), the reviewer is not called again.
   - `state.ts`: versioned `TaskState`, persisted as `<dir>/<taskId>.json` with an atomic tmp + rename write. `loadState` returns `undefined` when the file is missing and throws `StateError` when it is corrupt, never a silent default. The host chooses the state directory.
 - `src/git.ts`: `captureBaseline(cwd)` records the repository root, HEAD (`null` when there are no commits), branch (`null` when detached) and parsed `status --porcelain=v1 -z`. It must never mutate the repo: it runs with `--no-optional-locks`, uses argv-only `execFile` (no shell) and strips only the EOL from output (paths may contain spaces).
-- `test/helpers/`: `TemporaryGitRepository` (real temp repos), `FakeReviewer` (scripted results or throws, and records requests), temp-dir utils.
+- `src/reviewers/codex.ts`: `CodexReviewer` spawns `codex exec --sandbox read-only …` (argv only, prompt on stdin, strict `--output-schema`, result read from `--output-last-message`). It runs codex in its own process group with its own deadline: settle-once, the deadline wins over a late `close`/exit 0, the whole group is SIGKILLed (not spawn's `timeout`, which stays armed after a spawn error and hangs the hook). `buildReviewPrompt` is pure.
+- `src/hosts/claude-code/`: the plugin's hook code. `cli.ts <command|prompt-submit|stop>` → `runHook` in `hooks.ts`, which never throws: errors become `systemMessage` (or a blocked command), never block/approve. `handleStop` claims each completion (`sha256(last_assistant_message)`, exclusive `wx` create) so a duplicate/concurrent Stop never starts a second round. The plugin itself is the repo root: `.claude-plugin/`, `hooks/hooks.json`, `skills/cccr/SKILL.md`; the command is `/cccr:cccr on|off|status`. Hook matchers made only of letters/digits/`_-,| ` are exact-string matches in Claude Code, hence the `^(cccr:)?cccr$` regex.
+- `test/helpers/`: `TemporaryGitRepository` (real temp repos), `FakeReviewer` (scripted results or throws, and records requests), `FakeCodex` (real executable wrapping `test/fixtures/fake-codex.ts`; scripted steps, records argv/stdin/cwd), `ClaudeHostHarness` (realistic hook payloads), temp-dir utils. `test/integration/claude-workflow.test.ts` runs the exact `hooks.json` commands as subprocesses.
 
 ## Rules from the spec that shape code
 

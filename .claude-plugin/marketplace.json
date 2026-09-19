@@ -1,0 +1,14 @@
+{
+	"name": "cccr-local",
+	"description": "Local marketplace for the CCC Review plugin",
+	"owner": {
+		"name": "CCC Review"
+	},
+	"plugins": [
+		{
+			"name": "cccr",
+			"source": "./",
+			"description": "Claude Code writer → Codex reviewer"
+		}
+	]
+}

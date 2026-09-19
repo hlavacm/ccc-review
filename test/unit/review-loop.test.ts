@@ -37,6 +37,14 @@ describe("runReviewRound", () => {
 		assert.equal(reviewer.requests.length, 1);
 		assert.equal(reviewer.requests[0]?.round, 1);
 		assert.equal(reviewer.requests[0]?.previous, undefined);
+		assert.equal(reviewer.requests[0]?.context, undefined);
+	});
+
+	it("passes writer context through to the reviewer", async () => {
+		const reviewer = new FakeReviewer(approved());
+		const context = { task: "add x", report: "added x" };
+		await runReviewRound(newState(), reviewer, context);
+		assert.deepEqual(reviewer.requests[0]?.context, context);
 	});
 
 	it("changes requested then approval", async () => {

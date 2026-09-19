@@ -1,0 +1,36 @@
+{
+	"hooks": {
+		"UserPromptExpansion": [
+			{
+				"matcher": "^(cccr:)?cccr$",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hosts/claude-code/cli.ts\" command"
+					}
+				]
+			}
+		],
+		"UserPromptSubmit": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hosts/claude-code/cli.ts\" prompt-submit"
+					}
+				]
+			}
+		],
+		"Stop": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hosts/claude-code/cli.ts\" stop",
+						"timeout": 1800
+					}
+				]
+			}
+		]
+	}
+}

@@ -2,7 +2,7 @@
 
 ## Status
 
-TODO
+DONE
 
 ## Objective
 
@@ -210,21 +210,21 @@ The test suite must require no real Claude/Codex credentials.
 
 ## Acceptance criteria
 
-- [ ] Plugin/integration can be installed locally.
-- [ ] Review only runs when explicitly enabled.
-- [ ] Enabling records a Git baseline.
-- [ ] Claude can implement normally.
-- [ ] Claude completion triggers one logical Codex review round.
-- [ ] Valid Codex approval lets Claude finish.
-- [ ] Codex findings return to the same Claude task/session where the API permits.
-- [ ] Claude can fix findings and trigger a second review.
-- [ ] Loop stops at max 3 rounds.
-- [ ] Codex timeout/failure/invalid output is not approval.
-- [ ] Duplicate Stop/re-entry behavior has an automated regression test.
-- [ ] Fake Codex adapter tests exercise real subprocess invocation.
-- [ ] Full deterministic suite runs without credentials/network.
-- [ ] `status` shows whether review is active and current round.
-- [ ] At least one optional/manual real-world smoke test procedure is documented.
+- [x] Plugin/integration can be installed locally.
+- [x] Review only runs when explicitly enabled.
+- [x] Enabling records a Git baseline.
+- [x] Claude can implement normally.
+- [x] Claude completion triggers one logical Codex review round.
+- [x] Valid Codex approval lets Claude finish.
+- [x] Codex findings return to the same Claude task/session where the API permits.
+- [x] Claude can fix findings and trigger a second review.
+- [x] Loop stops at max 3 rounds.
+- [x] Codex timeout/failure/invalid output is not approval.
+- [x] Duplicate Stop/re-entry behavior has an automated regression test.
+- [x] Fake Codex adapter tests exercise real subprocess invocation.
+- [x] Full deterministic suite runs without credentials/network.
+- [x] `status` shows whether review is active and current round.
+- [x] At least one optional/manual real-world smoke test procedure is documented.
 
 ## Non-goals
 
@@ -244,3 +244,43 @@ Include:
 - example workflow,
 - commands run and results,
 - known API limitations.
+
+## Implementation notes
+
+Docs verified 2026-09-19 (code.claude.com hooks / plugins / plugins-reference / plugin-marketplaces / skills; `codex exec --help` of codex-cli 0.155.1, learn.chatgpt.com non-interactive docs and openai/codex source).
+
+### Claude extension points used
+
+- Plugin at the repo root: `.claude-plugin/plugin.json` (`name: cccr`), `.claude-plugin/marketplace.json` (`cccr-local`, source `./`), `hooks/hooks.json`, `skills/cccr/SKILL.md`. `claude plugin validate` passes.
+- Activation: plugin skills are always namespaced, so the command is `/cccr:cccr on [task] | off | status`. A `UserPromptExpansion` hook (matcher `^(cccr:)?cccr$`; a bare `cccr` is an exact-string match and would miss the namespaced `cccr:cccr`) handles it from the JSON payload (`command_name`, `command_args`, `session_id`, `cwd`) and returns `{"decision":"block","reason":…}` so the result is shown to the user without a model turn and without building a shell command from user text. The skill (`disable-model-invocation: true`) is only a fallback telling the user review is NOT active if the hook did not run.
+- Task context: `UserPromptSubmit` (`prompt`) records user prompts while active; text after `on` is recorded too.
+- Review: `Stop` hook, `timeout: 1800` s. `last_assistant_message` is the writer report. `CHANGES_REQUESTED` → `{"decision":"block","reason":<findings + instructions>}` (same session continues). Other outcomes → `systemMessage` only. `stop_hook_active` is deliberately not a guard (re-review after a block is the loop); termination comes from `maxRounds` (3) and Claude Code's own 8-block cap.
+- Session identity: `session_id` → `sessions/<id>.json` → `taskId`.
+
+### Codex invocation / safety
+
+`codex exec --sandbox read-only -c approval_policy="never" --cd <root> --ephemeral --color never --output-schema <strict schema> --output-last-message <file> -`, spawned as executable + argv, prompt on stdin, stdout ignored, stderr tail (4 KB) kept for messages. Codex runs in its own process group; at the deadline (default 20 min, `CCCR_CODEX_TIMEOUT_MS`) the whole group is SIGKILLed and the review fails immediately, without waiting for streams to close, and a result arriving later is ignored. Missing binary, non-zero exit (incl. auth), timeout, missing/empty/invalid JSON output and shape mismatch are errors → core `reviewer_error` → task deactivated, never approved. The prompt forbids file and Git mutation; CCC Review itself only runs read-only `git` for the baseline.
+
+State lives in `CCCR_STATE_DIR` / `${CLAUDE_PLUGIN_DATA}` / `~/.cccr` (not inside `.git`, so the repository is never written): `tasks/`, `sessions/`, `claims/`.
+
+### Bugs found and fixed (with regression tests)
+
+- Node's `spawn({ timeout })` timer is only cleared on exit, so a spawn error (missing `codex`) kept the Stop hook process alive for the whole Codex timeout. Fixed with an own timer cleared on `error` and `close`; regression: `claude-workflow.test.ts` "missing codex binary fails fast" (verified to fail with the old code).
+- (Found in Codex review) The `UserPromptExpansion` matcher `cccr` is an exact-string match, so `/cccr:cccr` never reached the hook. Fixed to `^(cccr:)?cccr$`; regression: `claude-workflow.test.ts` evaluates the matcher by the documented rules for both names and unrelated commands, and the workflow test now dispatches commands through the matcher (both verified to fail with the old matcher).
+- (Found in Codex review) The timeout waited for `close`, which a grandchild holding stderr delayed, and a parent exiting 0 after the deadline was approved. Fixed: settle-once with the deadline winning, process-group kill, stderr destroyed; regressions in `codex-reviewer.test.ts` "timeout is enforced when a grandchild holds stderr open" and "a result arriving after the deadline is not approval" (both reproduced the bug before the fix and assert the grandchild is killed).
+
+### Tests added
+
+- `test/unit/codex-prompt.test.ts` — prompt contract, no invented context, dirty baseline incl. renames/odd names, previous findings + ID continuation, strict-schema compatibility.
+- `test/unit/claude-feedback.test.ts` — writer feedback text, outcome → hook output (block only on `changes_requested`).
+- `test/unit/review-loop.test.ts` — context pass-through.
+- `test/integration/codex-reviewer.test.ts` — fake `codex` via the real subprocess path: approve, changes (null file/line), needs human, argv/stdin/cwd contract, previous findings, temp dir cleanup, malformed JSON, shape mismatch, missing findings, empty/no output, non-zero exit + stderr, auth-like failure, timeout kill, timeout with a grandchild holding stderr, late result after the deadline, missing executable, huge stderr (failure and success).
+- `test/integration/claude-host.test.ts` — host harness with realistic payloads + real adapter + fake codex + real temp repo/state: inactive session, other sessions, activation + baseline, non-repo, repeated on/off/status/unknown, approval, changes → second-round approval (task/report/previous findings reach Codex), max rounds, needs human, invalid/shape/non-zero/timeout/missing-binary ≠ approval, sequential and concurrent duplicate Stop (verified to fail without the claim), subagent Stop ignored, corrupt task/session state, invalid payloads, invalid config, no Git mutation.
+- `test/integration/claude-workflow.test.ts` — runs the exact `hooks.json` commands as subprocesses: temp repo → armed host → Stop → fake codex → block → Stop → approve → persisted state; missing-binary regression; garbage stdin + bad config; manifest sanity; command matcher selection.
+
+### Known API limitations
+
+- No documented, stable access to Claude's plan (transcript format undocumented) → the plan is not sent.
+- Claude Code gives no completion event id; duplicates are identified by `last_assistant_message`, so an identical final message is not reviewed twice.
+- `command_name` format for plugin skills is not documented; `cccr` and `cccr:cccr` are both accepted.
+- Installation into a real Claude Code session and a real Codex review are covered only by the documented manual smoke test (README), since they need credentials.

@@ -1,6 +1,7 @@
 import type { TaskState } from "./state.ts";
 import {
 	parseReviewResult,
+	type ReviewContext,
 	type Reviewer,
 	type ReviewRequest,
 } from "./types.ts";
@@ -31,6 +32,7 @@ export interface RoundResult {
 export async function runReviewRound(
 	state: TaskState,
 	reviewer: Reviewer,
+	context?: ReviewContext,
 ): Promise<RoundResult> {
 	if (!state.active) return { state, outcome: "inactive" };
 	if (state.round >= state.maxRounds)
@@ -43,6 +45,7 @@ export async function runReviewRound(
 		baseline: state.baseline,
 	};
 	if (state.lastResult) request.previous = state.lastResult;
+	if (context) request.context = context;
 
 	const { lastError: _, ...rest } = state;
 	const next: TaskState = { ...rest, round };
