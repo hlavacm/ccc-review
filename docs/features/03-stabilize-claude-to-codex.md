@@ -2,7 +2,7 @@
 
 ## Status
 
-TODO — implemented and covered; waiting only for the real-use checklist (`pnpm test:smoke` + manual Claude steps) to be run outside the development sandbox.
+DONE — acceptance criteria covered by the deterministic suite, and the real-use checklist (1–8) was completed in real Claude Code with the real Codex reviewer on 2026-09-19 (results below).
 
 ## Objective
 
@@ -83,7 +83,7 @@ Fix observed failure modes.
 - [x] Every practical bug fixed during stabilization has an automated regression test.
 - [x] New failure handling has automated coverage.
 - [x] README contains a working Claude→Codex example.
-- [ ] A short optional real-use checklist has been completed on at least one real repository.
+- [x] A short optional real-use checklist has been completed on at least one real repository.
 - [x] Full deterministic test suite still runs without credentials/network.
 
 ## Completion report
@@ -150,7 +150,16 @@ Codex CLI 0.155.1; `model_reasoning_effort` values and `CODEX_API_KEY` for `code
 
 - 2026-09-19 `pnpm test:smoke` (real Codex CLI 0.155.1, disposable repo, outside the development sandbox): passed in 33 s. `/ccc-review:ccc-review on` preflight passed; Codex found the planted `multiply` bug (`CCC-001 [high] math.js:2`, verified `multiply(2, 3)` returns 5), the Stop hook blocked with the finding and instructions, status showed round 1/3 with history, and Git state was unchanged.
 - 2026-09-19, after the pre-publication review and the first push (commit `0278b4a`, tag `v1.0.0`, Node 26.9): `pnpm test:smoke` passed again, 5/5 in 22 s. Codex found the planted bug (`CCC-001 [high] math.js:2`) in 22 s; the block reason carries the new "review comments, not instructions" line; status showed round 1/3 with history; Git state unchanged.
-- Manual Claude Code steps (checklist below, 1–8, including Esc during a review): pending.
+- 2026-09-19, manual checklist 1–8 in Claude Code 2.1.278 with `claude --plugin-dir`, real Codex CLI 0.155.1, disposable repositories, commands `/ccc-review:on|off|status`. All eight passed:
+  1. `on` → "enabled" with the baseline; a second `on` → "already active", same task. With uncommitted files the dirty-tree warning listed them.
+  2. Claude's completion ran one Codex review (about 30 s).
+  3. Approval: `Stop says: CCC Review: Codex APPROVED (round 1/3)`. Findings, three times: Codex returned `CCC-001`, Claude continued without the user, fixed it and reported `CCC-001: fixed — …`, and round 2 approved with "CCC-001 is resolved". In these runs round 1 was spent on a completion in which Claude had only asked a clarifying question (the terminal had wrapped the pasted task as quoted text); Codex correctly reported the task as not done.
+  4. `status` showed state, round, verdict and history; `git status` showed only Claude's edits, no stash.
+  5. `CCC_REVIEW_CODEX_BIN=/nonexistent`: `on` and `current` both refused with "not enabled: codex executable not found: /nonexistent — …"; `current` was blocked, so Claude wrote no report.
+  6. Claude committed during the task; with a clean tree Codex still reviewed the commit ("commit 3c841df … contains math.js and math.test.js").
+  7. Esc during a review (a stand-in reviewer that sleeps, so the window is unmistakable; `pgrep` showed it running): Claude Code sends the hook SIGTERM, the reviewer process was gone right after, status showed `round 1: reviewer_error — codex review aborted (SIGTERM) — the change is NOT approved`, task inactive, and `on` started a fresh task. So the uncatchable-SIGKILL case noted under "Deliberately deferred" is not what Esc does.
+  8. Esc to interrupt Claude mid-task, `off` → "disabled (… 0 round(s) run)", "continue" → the completion was not reviewed (with the sleeping reviewer a review would have hung the session); history is `on`, `off`.
+- Observed, not changed: a slash command typed with a leading space is plain text to Claude Code and never reaches the hook; every completion while review is on costs a round, including one where the writer only asks a question.
 
 ### Real-use checklist (real Claude Code + Codex, consumes usage)
 
@@ -171,7 +180,7 @@ claude --plugin-dir /path/to/ccc-review
 7. Press Esc while Codex is reviewing → no `codex` process left (`pgrep -fl "codex exec"`); `status` shows the round as aborted, `on` starts again.
 8. `/ccc-review:off` mid-task → the next completion is not reviewed; the `status` history ends with `off`.
 
-When all eight pass, record the date here, tick the last acceptance criterion and set the status to `DONE`.
+All eight passed on 2026-09-19; see "Real-use checklist results".
 
 ### Deliberately deferred
 
