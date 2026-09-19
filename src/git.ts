@@ -14,12 +14,15 @@ interface GitRun {
 	stderr: string;
 }
 
-/** Read-only git invocation: argv only, no shell, no optional index locks/writes. */
+/**
+ * Read-only git invocation: argv only, no shell, no optional index locks/writes,
+ * and never the program a repository's `core.fsmonitor` names.
+ */
 async function git(cwd: string, args: string[]): Promise<GitRun> {
 	try {
 		const { stdout, stderr } = await execFileAsync(
 			"git",
-			["--no-optional-locks", ...args],
+			["--no-optional-locks", "-c", "core.fsmonitor=false", ...args],
 			{
 				cwd,
 				env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", LC_ALL: "C" },

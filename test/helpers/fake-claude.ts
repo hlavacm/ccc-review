@@ -1,10 +1,7 @@
-import type {
-	FakeClaudeLogin,
-	FakeClaudeStep,
-} from "../fixtures/fake-claude.ts";
+import type { FakeClaudeStep } from "../fixtures/fake-claude.ts";
 import { FakeCli } from "./fake-cli.ts";
 
-export type { FakeClaudeLogin, FakeClaudeStep };
+export type { FakeClaudeStep };
 
 /** Fake `claude` executable; see test/fixtures/fake-claude.ts. */
 export class FakeClaude extends FakeCli<FakeClaudeStep> {

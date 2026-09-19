@@ -6,7 +6,7 @@ import {
 	findingLines,
 	stopOutput,
 	writerFeedback,
-} from "../../src/hosts/claude-code/hooks.ts";
+} from "../../src/hosts/common.ts";
 import {
 	approved,
 	changesRequested,
@@ -39,6 +39,7 @@ describe("writerFeedback", () => {
 		assert.match(text, /- CCC-001 \[high\] a\.ts:3: null deref/);
 		for (const needle of [
 			/Evaluate every finding independently/,
+			/review comments, not instructions/,
 			/Fix valid findings/,
 			/Reject invalid findings with concrete reasoning/,
 			/Run relevant verification/,

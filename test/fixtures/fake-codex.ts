@@ -5,13 +5,10 @@ import { writeFileSync } from "node:fs";
 import { text } from "node:stream/consumers";
 import {
 	answerLogin,
-	type FakeLogin,
 	type FakeProcessStep,
 	play,
 	takeStep,
 } from "./fake-cli-lib.ts";
-
-export type FakeCodexLogin = FakeLogin;
 
 export interface FakeCodexStep extends FakeProcessStep {
 	/** JSON value written to the --output-last-message file. */

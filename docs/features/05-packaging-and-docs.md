@@ -193,6 +193,14 @@ Suite: 331 deterministic tests (103 unit, 228 integration), all passing; `pnpm c
 
 - `.github/workflows/ci.yml` ran only Node 24 although `engines.node` is `>=22.18` and these notes said "22.18 and 24". The matrix is now `["22.18", "24"]`, and `packaging.test.ts` "CI runs the suite on the minimum supported Node version" ties it to `package.json` (failed first). Not verified: an actual run on Node 22.18 (no remote, only Node 26 locally).
 
+### Pre-publication review (2026-09-19)
+
+- The two usage-consuming smoke tests were opt-in only by file name: a bare `node --test` (or an IDE "run all tests") would have run them against the real CLIs. They now skip unless `CCC_REVIEW_SMOKE=1`, like `pnpm test:smoke` sets.
+- README "Security and privacy" now says what read-only does not mean: Codex can read outside the repository, secrets in changed files are sent with the diff, state is stored unencrypted. Also: Windows unsupported, state locations in Uninstall, and the Node versions actually exercised.
+- Tests: the 500 ms deadlines that also read the grandchild's pid are 2000 ms (two fake-CLI starts had to fit), spawned hooks are stopped when an assertion fails (SIGTERM and wait, so the hook still kills the reviewer's process group; SIGKILL would orphan it — found in Codex review, checked with a forced failure), three assertions that could not fail were fixed, `claude-host.test.ts` no longer repeats the scenarios `host-scenarios.ts` runs for both directions (their extra assertions moved there), one `waitFor`/`assertGone` helper instead of four copies, hook subprocesses always get an explicit cwd.
+- Removed dead code: `RunOptions.env`, re-exports kept only for tests, unused fake-CLI type aliases.
+- `CHANGELOG.md` has no `[Unreleased]` section: nothing was published before 1.0.0. Tag `v1.0.0` after the first push so its links resolve.
+
 ### Ideas for v2 (only if real use asks for them)
 
 - Publish the marketplace from GitHub (`claude plugin marketplace add owner/repo`, `codex plugin marketplace add owner/repo`) and tag releases with `claude plugin tag`.

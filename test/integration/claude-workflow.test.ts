@@ -18,28 +18,9 @@ import {
 } from "../helpers/plugin-hooks.ts";
 import { makeTempDir, removeDir } from "../helpers/temp-dir.ts";
 import { TemporaryGitRepository } from "../helpers/temp-git-repo.ts";
+import { assertGone, stopHook, waitFor } from "../helpers/wait.ts";
 
 const pluginRoot = join(import.meta.dirname, "../..");
-
-async function waitFor<T>(probe: () => Promise<T | undefined>): Promise<T> {
-	for (let i = 0; i < 200; i++) {
-		const value = await probe();
-		if (value !== undefined) return value;
-		await new Promise((r) => setTimeout(r, 25));
-	}
-	assert.fail("condition not reached");
-}
-
-async function assertGone(pid: number): Promise<void> {
-	await waitFor(async () => {
-		try {
-			process.kill(pid, 0);
-			return undefined;
-		} catch {
-			return true;
-		}
-	});
-}
 
 const hooksJson = readHooks(pluginRoot, "hooks/hooks.json");
 const hookCommand = (event: string) => hookCommand_(hooksJson, event);
@@ -56,8 +37,12 @@ function claudeCodeMatches(matcher: string, value: string): boolean {
 }
 
 /** Runs a hook exactly as registered in hooks/hooks.json. */
-const spawnHook = (event: string, stdin: string, env: Record<string, string>) =>
-	runHookCommand(hookCommand(event), pluginRoot, stdin, env);
+const spawnHook = (
+	event: string,
+	stdin: string,
+	env: Record<string, string>,
+	cwd: string,
+) => runHookCommand(hookCommand(event), pluginRoot, stdin, env, cwd);
 
 const runPluginHook = (
 	event: string,
@@ -69,7 +54,9 @@ const runPluginHook = (
 	const name = (payload as { command_name?: string }).command_name;
 	if (matcher !== undefined && !claudeCodeMatches(matcher, name ?? ""))
 		return undefined;
-	return spawnHook(event, JSON.stringify(payload), env);
+	// Like Claude Code: the hook runs in the session's cwd, never the developer's.
+	const { cwd } = payload as { cwd: string };
+	return spawnHook(event, JSON.stringify(payload), env, cwd);
 };
 
 describe("plugin manifest", () => {
@@ -274,7 +261,7 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 
 	// Regression: codex runs in its own process group, so killing the Stop hook
 	// (user interrupt, Claude Code giving up) left codex and its children running.
-	it("aborting the Stop hook kills the whole codex process group", async () => {
+	it("aborting the Stop hook kills the whole codex process group", async (t) => {
 		await codex.script({ sleepMs: 30_000, childSleepMs: 30_000 });
 		runPluginHook(
 			"UserPromptExpansion",
@@ -290,6 +277,8 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 			[join(pluginRoot, "src/hosts/claude-code/cli.ts"), "stop"],
 			{ env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "pipe"] },
 		);
+		// A failing assertion below must not leave the hook and its group running.
+		t.after(() => stopHook(hook));
 		hook.stdin.end(
 			JSON.stringify({
 				...base("Stop"),
@@ -361,10 +350,12 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 	});
 
 	it("garbage stdin and bad config never block or crash the hook", () => {
-		const out = spawnHook("Stop", "garbage", {
-			CCC_REVIEW_STATE_DIR: stateDir,
-			CCC_REVIEW_CODEX_TIMEOUT_MS: "soon",
-		});
+		const out = spawnHook(
+			"Stop",
+			"garbage",
+			{ CCC_REVIEW_STATE_DIR: stateDir, CCC_REVIEW_CODEX_TIMEOUT_MS: "soon" },
+			repo.root,
+		);
 		assert.equal(out?.decision, undefined);
 		assert.match(String(out?.systemMessage), /CCC Review error/);
 	});

@@ -23,7 +23,6 @@ export interface RunOptions {
 	missingHint: string;
 	/** Setting named in a timeout error. */
 	timeoutSetting: string;
-	env?: NodeJS.ProcessEnv;
 }
 
 const OUTPUT_TAIL = 4000;
@@ -51,7 +50,6 @@ export function runProcess(o: RunOptions): Promise<Exit> {
 			cwd: o.cwd,
 			stdio: ["pipe", "pipe", "pipe"],
 			detached: true,
-			...(o.env ? { env: o.env } : {}),
 		});
 		const killGroup = () => {
 			try {

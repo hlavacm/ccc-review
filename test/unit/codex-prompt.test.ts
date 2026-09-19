@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { ReviewRequest } from "../../src/core/types.ts";
-import { buildReviewPrompt, REVIEW_SCHEMA } from "../../src/reviewers/codex.ts";
+import {
+	buildReviewPrompt,
+	REVIEW_SCHEMA,
+} from "../../src/reviewers/prompt.ts";
 import { changesRequested, finding } from "../helpers/fake-reviewer.ts";
 
 const request = (extra: Partial<ReviewRequest> = {}): ReviewRequest => ({

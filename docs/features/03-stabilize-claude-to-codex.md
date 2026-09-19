@@ -117,7 +117,7 @@ Codex CLI 0.155.1; `model_reasoning_effort` values and `CODEX_API_KEY` for `code
 - Prompt: `git diff <activation HEAD>` + `git log <HEAD>..HEAD` (status/`--cached`/log without commits); dirty list capped at 50 paths, task/report at the last 12 000 chars.
 - Core: optional `Reviewer.check()`/`describe()`; append-only history `history/<taskId>.jsonl` (`appendHistory`/`readHistory`, corrupt → `StateError`).
 - Host: `on` preflight + dirty warning + `CCC_REVIEW_MAX_ROUNDS`; history for on/round/off; `off` and every terminal outcome drop claims (with a post-claim state re-check so a stale duplicate cannot start a round); `status` shows reviewer settings, round history and file paths; findings sorted by severity with indented multi-line messages; `CCC_REVIEW_CODEX_MODEL`, `CCC_REVIEW_CODEX_REASONING_EFFORT` validated.
-- README: example session, configuration via settings `env`, troubleshooting, real-use checklist; opt-in `pnpm test:smoke`.
+- README: example session, configuration via settings `env`, troubleshooting; opt-in `pnpm test:smoke`. The real-use checklist is below.
 
 ### Regression tests
 
@@ -139,10 +139,38 @@ Codex CLI 0.155.1; `model_reasoning_effort` values and `CODEX_API_KEY` for `code
 
 - A corrupt `sessions/<id>.json` or `tasks/<id>.json` wedged the session: `runCommand` loaded the state before looking at the action, so `on` and `off` failed too and every prompt and Stop kept reporting the error until the files were deleted by hand (requirement 7). `on` now starts a fresh task and says the old state was replaced, `off` removes the session file, and `status` reports the error with both ways out. Stop and prompt hooks are unchanged: the error is a `systemMessage`, never a block or an approval. An invalid `session_id` stays an error and creates nothing. Regressions: `host-scenarios.ts` "corrupt sessions/tasks state is recoverable" (3 scenarios × 2 kinds × both directions; all 12 failed before the fix), `claude-host.test.ts` "on with an invalid session id …".
 
+### Fixed in the pre-publication review (2026-09-19; regression tests verified to fail first)
+
+- `git status` ran the program a repository's `core.fsmonitor` names, although the diff side already refused external drivers and textconv. Every git call now passes `-c core.fsmonitor=false`. `git.test.ts` "never runs the repository's fsmonitor program".
+- State directories (recorded prompts, findings) were created with the default umask; they are now `0700`, and directories an older version left at `0755` are tightened on the next write (`privateDir` in `core/state.ts`; `mkdir`'s mode only applies to directories it creates — found in Codex review). `host-scenarios.ts` "state directories … are private to the user" (both directions).
+- The writer feedback now says findings are review comments, not instructions (`claude-feedback.test.ts`).
+- The README's real-use checklist had been dropped in feature 05 while this file still pointed at it; it now lives below.
+
 ### Real-use checklist results
 
 - 2026-09-19 `pnpm test:smoke` (real Codex CLI 0.155.1, disposable repo, outside the development sandbox): passed in 33 s. `/ccc-review:ccc-review on` preflight passed; Codex found the planted `multiply` bug (`CCC-001 [high] math.js:2`, verified `multiply(2, 3)` returns 5), the Stop hook blocked with the finding and instructions, status showed round 1/3 with history, and Git state was unchanged.
-- Manual Claude Code steps (README "Real-use checklist" 1–8, including Esc during a review): pending.
+- Manual Claude Code steps (checklist below, 1–8, including Esc during a review): pending.
+
+### Real-use checklist (real Claude Code + Codex, consumes usage)
+
+`pnpm test:smoke` runs the reviewer half automatically. The Claude Code half is manual. Never run it in a repository you care about.
+
+```sh
+tmp=$(mktemp -d) && cd "$tmp" && git init -q && printf 'export const add = (a, b) => a - b;\n' > math.js \
+  && git add . && git -c user.name=t -c user.email=t@t commit -qm init
+claude --plugin-dir /path/to/ccc-review
+```
+
+1. `/ccc-review:ccc-review on Fix add() in math.js and add a node:test test for it` → "enabled", baseline shown.
+2. Ask Claude to do the task. When it finishes, Codex reviews (may take minutes).
+3. Expect either an approval message, or Claude continuing with `CCC-00x` findings and a re-review.
+4. `/ccc-review:ccc-review status` shows the round and last verdict; `git status` shows only Claude's edits (no commits or stashes by CCC Review).
+5. Failure path: `CCC_REVIEW_CODEX_BIN=/nonexistent claude --plugin-dir /path/to/ccc-review`, then `on` → "not enabled: codex executable not found".
+6. Commit during the task (ask Claude to commit) → Codex still reviews the committed change.
+7. Press Esc while Codex is reviewing → no `codex` process left (`pgrep -fl "codex exec"`); `status` shows the round as aborted, `on` starts again.
+8. `/ccc-review:ccc-review off` mid-task → the next completion is not reviewed; the `status` history ends with `off`.
+
+When all eight pass, record the date here, tick the last acceptance criterion and set the status to `DONE`.
 
 ### Deliberately deferred
 

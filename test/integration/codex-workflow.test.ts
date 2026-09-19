@@ -18,6 +18,7 @@ import {
 } from "../helpers/plugin-hooks.ts";
 import { makeTempDir, removeDir } from "../helpers/temp-dir.ts";
 import { TemporaryGitRepository } from "../helpers/temp-git-repo.ts";
+import { assertGone, stopHook, waitFor } from "../helpers/wait.ts";
 
 const pluginRoot = join(import.meta.dirname, "../..");
 const manifest = JSON.parse(
@@ -26,15 +27,6 @@ const manifest = JSON.parse(
 
 const hooksJson = readHooks(pluginRoot, manifest.hooks);
 const hookCommand = (event: string) => hookCommand_(hooksJson, event);
-
-async function waitFor<T>(probe: () => Promise<T | undefined>): Promise<T> {
-	for (let i = 0; i < 200; i++) {
-		const value = await probe();
-		if (value !== undefined) return value;
-		await new Promise((r) => setTimeout(r, 25));
-	}
-	assert.fail("condition not reached");
-}
 
 /** Runs a hook exactly as registered in codex/hooks.json, in the session cwd. */
 const runPluginHook = (
@@ -211,7 +203,7 @@ describe("Codex → Claude workflow through the plugin hooks", () => {
 		assert.match(String(out?.systemMessage), /NOT approved[\s\S]*not found/);
 	});
 
-	it("aborting the Stop hook kills the whole claude process group", async () => {
+	it("aborting the Stop hook kills the whole claude process group", async (t) => {
 		await claude.script({ sleepMs: 30_000, childSleepMs: 30_000 });
 		prompt("$ccc-review on");
 		const hook = spawn(
@@ -219,6 +211,8 @@ describe("Codex → Claude workflow through the plugin hooks", () => {
 			[join(pluginRoot, "src/hosts/codex/cli.ts"), "stop"],
 			{ env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "pipe"] },
 		);
+		// A failing assertion below must not leave the hook and its group running.
+		t.after(() => stopHook(hook));
 		hook.stdin.end(
 			JSON.stringify({
 				...base("Stop"),
@@ -236,14 +230,7 @@ describe("Codex → Claude workflow through the plugin hooks", () => {
 		const exited = new Promise<void>((r) => hook.on("exit", () => r()));
 		hook.kill("SIGTERM");
 		await exited;
-		await waitFor(async () => {
-			try {
-				process.kill(childPid, 0);
-				return undefined;
-			} catch {
-				return true;
-			}
-		});
+		await assertGone(childPid);
 		const state = await loadState(join(stateDir, "tasks"), taskId());
 		assert.equal(state?.active, false);
 		assert.equal(state?.lastResult, undefined);
@@ -254,10 +241,13 @@ describe("Codex → Claude workflow through the plugin hooks", () => {
 	});
 
 	it("garbage stdin and bad config never block or crash the hook", () => {
-		const out = runHookCommand(hookCommand("Stop"), pluginRoot, "garbage", {
-			PLUGIN_DATA: stateDir,
-			CCC_REVIEW_CLAUDE_TIMEOUT_MS: "soon",
-		});
+		const out = runHookCommand(
+			hookCommand("Stop"),
+			pluginRoot,
+			"garbage",
+			{ PLUGIN_DATA: stateDir, CCC_REVIEW_CLAUDE_TIMEOUT_MS: "soon" },
+			repo.root,
+		);
 		assert.ok(out);
 		assert.deepEqual(Object.keys(out), ["systemMessage"]);
 		assert.match(String(out.systemMessage), /CCC Review error/);

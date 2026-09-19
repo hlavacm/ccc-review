@@ -131,7 +131,8 @@ prefixed `CCC Review`.
 (`codex login status` / `claude auth status`, or only `--version` with an API
 key) and refuses to enable review otherwise.
 
-Tested with Claude Code 2.1.278, codex-cli 0.155.1 and Node.js 22.18–26.
+Developed with Claude Code 2.1.278, codex-cli 0.155.1 and Node.js 26; CI runs
+the test suite on Node.js 22.18 and 24.
 
 ## Install
 
@@ -329,6 +330,20 @@ Guarantees:
 - State stays outside the repository (see `CCC_REVIEW_STATE_DIR`). Nothing is sent
   anywhere except to the reviewer CLI you configured.
 
+What read-only does not mean:
+
+- **Codex can read outside the repository.** Its read-only sandbox blocks
+  writes and network access, not reads: the Codex reviewer can read any file
+  your user account can read, and may quote it in a finding. The Claude
+  reviewer has file tools only (Read/Grep/Glob, nothing it is not
+  pre-approved for) and no shell.
+- **Secrets in changed files are sent.** A credential in a changed tracked
+  file is part of the diff and goes to the reviewer's model provider. Do not
+  enable review on changes you would not paste into a chat with that provider.
+- **State is stored unencrypted.** Your recorded prompts and the reviewer's
+  findings are kept as plain files in the state directory (its directories are
+  kept at mode `0700`) until you delete them.
+
 ## Upgrade
 
 **Claude Code** caches an installed plugin by version, so an update arrives
@@ -354,8 +369,10 @@ review the changed hooks again in `/hooks`.
 
 ## Uninstall
 
-First run `/ccc-review:ccc-review off` or `$ccc-review off` in active sessions, and note the
-state location that `status` prints.
+First run `/ccc-review:ccc-review off` or `$ccc-review off` in active sessions. The state
+directory is `CCC_REVIEW_STATE_DIR` if you set it, otherwise the plugin data
+directory (`${CLAUDE_PLUGIN_DATA}` for Claude Code, `${PLUGIN_DATA}` for Codex), otherwise
+`~/.ccc-review`; `status` of an enabled task prints the exact paths.
 
 ```sh
 claude plugin uninstall ccc-review@hlavacm
@@ -384,6 +401,7 @@ data directory, unless you set `CCC_REVIEW_STATE_DIR`).
 
 ## Known limitations
 
+- Windows is not supported (POSIX process groups and `/dev/null`); WSL works.
 - The implementation plan is not passed to the reviewer, because neither host
   exposes a documented, stable way to read it.
 - A completion is identified by its final message (in Codex, `turn_id` plus

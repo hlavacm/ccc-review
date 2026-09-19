@@ -269,6 +269,21 @@ describe("describeChanges (real temporary repositories)", () => {
 		await assert.rejects(stat(marker));
 	});
 
+	it("never runs the repository's fsmonitor program", async () => {
+		await repo.dispose();
+		repo = await TemporaryGitRepository.create("repo");
+		const marker = join(repo.root, "..", "fsmonitor-ran");
+		const script = join(repo.root, "..", "fsmonitor.sh");
+		await writeFile(script, `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
+		await repo.commitFile("a.txt", "a\n");
+		await repo.write("a.txt", "b\n");
+		// Last: the helper's own git commands would run it too.
+		repo.git("config", "core.fsmonitor", script);
+		const baseline = await captureBaseline(repo.root);
+		assert.match(await describeChanges(baseline), /-a\n\+b/);
+		await assert.rejects(stat(marker));
+	});
+
 	it("throws GitError when the activation commit is gone", async () => {
 		await repo.commitFile("a.txt", "a\n");
 		const baseline = await captureBaseline(repo.root);

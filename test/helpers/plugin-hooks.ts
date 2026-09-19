@@ -34,7 +34,7 @@ export function runHookCommand(
 	pluginRoot: string,
 	stdin: string,
 	env: Record<string, string>,
-	cwd = process.cwd(),
+	cwd: string,
 ): Record<string, unknown> | undefined {
 	const run = spawnSync("/bin/sh", ["-c", command], {
 		input: stdin,

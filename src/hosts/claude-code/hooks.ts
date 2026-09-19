@@ -17,7 +17,6 @@ import {
 	runCommand,
 } from "../common.ts";
 
-export { findingLines, stopOutput, writerFeedback } from "../common.ts";
 export type { HookOutput, HostConfig };
 
 const ROLES: Roles = { writer: "claude", reviewer: "codex" };

@@ -1,2 +1,4 @@
+# Lets a machine with a global pnpm `minimumReleaseAge` install the pinned
+# @types/node. Update or drop it with the next @types/node bump.
 minimumReleaseAgeExclude:
   - '@types/node@26.6.2'

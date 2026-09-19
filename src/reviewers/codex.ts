@@ -10,8 +10,6 @@ import {
 import { duration, type Exit, runProcess, stderrTail } from "./process.ts";
 import { buildReviewPrompt, REVIEW_SCHEMA } from "./prompt.ts";
 
-export { buildReviewPrompt, REVIEW_SCHEMA };
-
 export const DEFAULT_CODEX_TIMEOUT_MS = 20 * 60 * 1000;
 
 export const REASONING_EFFORTS = [

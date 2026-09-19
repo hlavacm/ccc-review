@@ -10,7 +10,12 @@ import { CodexHostHarness } from "../helpers/codex-host.ts";
 import { makeTempDir, removeDir } from "../helpers/temp-dir.ts";
 import { TemporaryGitRepository } from "../helpers/temp-git-repo.ts";
 
-describe("real Claude review of a Codex completion (smoke)", () => {
+// Guarded here too: a bare `node --test` or an IDE "run all" also finds this file.
+const optIn = process.env.CCC_REVIEW_SMOKE === "1";
+
+describe("real Claude review of a Codex completion (smoke)", {
+	skip: !optIn && "opt-in, consumes usage: pnpm test:smoke",
+}, () => {
 	let repo: TemporaryGitRepository;
 	let stateDir: string;
 

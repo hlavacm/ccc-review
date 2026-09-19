@@ -2,7 +2,7 @@
 // direction supplies its real host adapter (driven by a harness with
 // realistic hook payloads) and its real reviewer adapter spawning a fake CLI.
 import assert from "node:assert/strict";
-import { readdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import type { TaskState } from "../../src/core/state.ts";
@@ -138,6 +138,7 @@ export function hostScenarios(d: Direction): void {
 			);
 			const state = await host.state();
 			assert.equal(state?.active, false);
+			assert.equal(state?.round, 1);
 			assert.equal(state?.lastResult?.verdict, "APPROVED");
 			assert.equal(await host.stop("anything else"), undefined);
 			assert.equal(await calls(), 1);
@@ -148,7 +149,7 @@ export function hostScenarios(d: Direction): void {
 				changesRequested(finding("CCC-001", "x must be 3")),
 				approved(),
 			]);
-			await host.command("on");
+			await host.command("on add feature x");
 			await host.prompt("make x 3");
 			await repo.write("app.ts", "export const x = 2;\n");
 
@@ -174,7 +175,10 @@ export function hostScenarios(d: Direction): void {
 
 			const [one, two] = (await env?.calls()) ?? [];
 			assert.equal(one?.cwd, repo.root);
-			assert.match(one?.stdin ?? "", /Original task:\nmake x 3/);
+			assert.match(
+				one?.stdin ?? "",
+				/Original task:\nadd feature x\n\nmake x 3/,
+			);
 			assert.match(one?.stdin ?? "", /Set x to 2\./);
 			assert.match(two?.stdin ?? "", /Review round: 2/);
 			assert.match(two?.stdin ?? "", /CCC-001 \[high\]: x must be 3/);
@@ -248,6 +252,7 @@ export function hostScenarios(d: Direction): void {
 			await host.command("on");
 			assert.equal((await host.stop("same report"))?.decision, "block");
 			assert.equal(await host.stop("same report"), undefined);
+			assert.equal(await host.stop("same report", true), undefined);
 			assert.equal(await calls(), 1);
 			assert.equal((await host.state())?.round, 1);
 		});
@@ -272,18 +277,20 @@ export function hostScenarios(d: Direction): void {
 			assert.match((await host.command("off"))?.reason ?? "", /disabled/);
 			assert.equal(await host.stop("done"), undefined);
 			assert.equal(await calls(), 0);
+			assert.match((await host.command("status"))?.reason ?? "", /inactive/);
+			assert.match((await host.command("off"))?.reason ?? "", /already off/);
 		});
 
 		describe("reviewer failure is never approval", () => {
-			const cases: [ScenarioStep, RegExp][] = [
+			const cases: [Extract<ScenarioStep, { fail: string }>, RegExp][] = [
 				[{ fail: "malformed" }, /invalid JSON/],
 				[{ fail: "shape" }, /invalid verdict/],
 				[{ fail: "nonzero" }, /exited with code 1: boom/],
 				[{ fail: "timeout" }, /timed out/],
 			];
 			for (const [step, error] of cases)
-				it(`${"fail" in step ? step.fail : ""}`, async () => {
-					const timeout = "fail" in step && step.fail === "timeout";
+				it(step.fail, async () => {
+					const timeout = step.fail === "timeout";
 					await setup([step], { timeoutMs: timeout ? 1000 : 10_000 });
 					await host.command("on");
 					const out = await host.stop("done");
@@ -300,8 +307,27 @@ export function hostScenarios(d: Direction): void {
 					assert.equal(state?.active, false);
 					assert.equal(state?.lastResult, undefined);
 					assert.match(state?.lastError ?? "", error);
+					assert.match(
+						(await host.command("status"))?.reason ?? "",
+						/last error/,
+					);
 					assert.equal(await host.stop("done again"), undefined);
 				});
+		});
+
+		it("state directories (prompts, findings) are private to the user", async () => {
+			await setup([changesRequested()]);
+			// An older version created them with the default umask.
+			await mkdir(join(stateDir, "sessions"), { mode: 0o755 });
+			await mkdir(join(stateDir, "claims"), { mode: 0o755 });
+			await host.command("on secret task");
+			await host.stop("done");
+			const dirs = await readdir(stateDir);
+			assert.deepEqual(dirs.sort(), ["claims", "history", "sessions", "tasks"]);
+			for (const dir of dirs) {
+				const mode = (await stat(join(stateDir, dir))).mode & 0o777;
+				assert.equal(mode, 0o700, `${dir}: ${mode.toString(8)}`);
+			}
 		});
 
 		// A wedged session must be recoverable with the commands the user has.

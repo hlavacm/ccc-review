@@ -1,8 +1,7 @@
-import type { FakeCodexLogin, FakeCodexStep } from "../fixtures/fake-codex.ts";
-import { type FakeCall, FakeCli } from "./fake-cli.ts";
+import type { FakeCodexStep } from "../fixtures/fake-codex.ts";
+import { FakeCli } from "./fake-cli.ts";
 
-export type { FakeCodexLogin, FakeCodexStep };
-export type FakeCodexCall = FakeCall;
+export type { FakeCodexStep };
 
 /** Fake `codex` executable; see test/fixtures/fake-codex.ts. */
 export class FakeCodex extends FakeCli<FakeCodexStep> {

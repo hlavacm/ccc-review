@@ -6,7 +6,8 @@
 ._*
 
 # Custom folder icons
-Icon
+Icon
+
 
 # Volume root files
 .DocumentRevisions-V100
@@ -53,4 +54,4 @@ coverage/
 .ccc-review/
 .env
 .env.*
-.claude/settings.local.json
+.claude/

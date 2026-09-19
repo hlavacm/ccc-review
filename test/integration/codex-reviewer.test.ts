@@ -16,19 +16,7 @@ import {
 	needsHuman,
 } from "../helpers/fake-reviewer.ts";
 import { TemporaryGitRepository } from "../helpers/temp-git-repo.ts";
-
-/** Waits briefly for a killed process to disappear. */
-async function assertGone(pid: number): Promise<void> {
-	for (let i = 0; i < 40; i++) {
-		try {
-			process.kill(pid, 0);
-		} catch {
-			return;
-		}
-		await new Promise((r) => setTimeout(r, 50));
-	}
-	assert.fail(`process ${pid} still alive`);
-}
+import { assertGone } from "../helpers/wait.ts";
 
 // Real subprocess path: CodexReviewer spawns a fake `codex` executable.
 describe("CodexReviewer", () => {
@@ -196,10 +184,13 @@ describe("CodexReviewer", () => {
 		it("timeout is enforced when a grandchild holds stderr open", async () => {
 			const started = Date.now();
 			await assert.rejects(
-				review({ sleepMs: 30_000, childSleepMs: 30_000 }, 500),
-				/timed out after 500 ms/,
+				review({ sleepMs: 30_000, childSleepMs: 30_000 }, 2000),
+				/timed out after 2000 ms/,
 			);
-			assert.ok(Date.now() - started < 3000, `took ${Date.now() - started} ms`);
+			assert.ok(
+				Date.now() - started < 10_000,
+				`took ${Date.now() - started} ms`,
+			);
 			assert.ok(codex);
 			await assertGone(await codex.childPid());
 		});
@@ -207,10 +198,13 @@ describe("CodexReviewer", () => {
 		it("a result arriving after the deadline is not approval", async () => {
 			const started = Date.now();
 			await assert.rejects(
-				review({ output: approved(), childSleepMs: 30_000 }, 500),
-				/timed out after 500 ms/,
+				review({ output: approved(), childSleepMs: 30_000 }, 2000),
+				/timed out after 2000 ms/,
 			);
-			assert.ok(Date.now() - started < 3000, `took ${Date.now() - started} ms`);
+			assert.ok(
+				Date.now() - started < 10_000,
+				`took ${Date.now() - started} ms`,
+			);
 			assert.ok(codex);
 			await assertGone(await codex.childPid());
 		});

@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import {
 	appendFile,
+	chmod,
 	mkdir,
 	readFile,
 	rename,
 	rm,
+	stat,
 	writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
@@ -71,10 +73,21 @@ function stateFile(dir: string, taskId: string, ext = ".json"): string {
 	return join(dir, `${taskId}${ext}`);
 }
 
+/**
+ * State holds user prompts and findings: owner-only. `mkdir`'s mode applies
+ * only to directories it creates, so an existing one is tightened too.
+ */
+export async function privateDir(dir: string): Promise<void> {
+	await mkdir(dir, { recursive: true, mode: 0o700 });
+	const { mode } = await stat(dir);
+	// Only ever tightens: group/other bits go, the owner's stay as they are.
+	if (mode & 0o077) await chmod(dir, mode & 0o700);
+}
+
 /** Atomic write: a crash never leaves a half-written state file. */
 export async function saveState(dir: string, state: TaskState): Promise<void> {
 	const file = stateFile(dir, state.taskId);
-	await mkdir(dir, { recursive: true });
+	await privateDir(dir);
 	const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
 	try {
 		await writeFile(tmp, `${JSON.stringify(state, null, 2)}\n`);
@@ -201,7 +214,7 @@ export async function appendHistory(
 	entry: Omit<HistoryEntry, "at">,
 ): Promise<void> {
 	const file = stateFile(dir, taskId, ".jsonl");
-	await mkdir(dir, { recursive: true });
+	await privateDir(dir);
 	const line = JSON.stringify({ at: new Date().toISOString(), ...entry });
 	await appendFile(file, `${line}\n`);
 }

@@ -4,16 +4,6 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
-
-### Fixed
-
-- Finding IDs are no longer reused within a task: new findings are numbered
-  after the highest ID of any earlier round, not only the previous one.
-- An unreadable session or task state file no longer wedges the session: `on`
-  starts a fresh task and `off` resets the session; `status` says so.
-- CI also runs on the minimum supported Node version (22.18).
-
 ## [1.0.0] - 2026-09-19
 
 First release.
@@ -33,6 +23,8 @@ First release.
   round per completion even when a completion event is delivered twice.
 - Every reviewer failure (missing binary, no login, non-zero exit, timeout,
   invalid output, abort) stops the review and is never treated as approval.
+- An unreadable state file never wedges a session: `on` starts a fresh task and
+  `off` resets the session.
 - Git baseline at activation (root, `HEAD`, branch, dirty paths). CCC Review never
   commits, stashes, resets, checks out, rebases or pushes.
 - Configuration through a small set of environment variables: rounds,
@@ -42,5 +34,4 @@ First release.
   temporary Git repositories, fake `claude`/`codex` executables, host
   harnesses), plus opt-in smoke tests against the real CLIs.
 
-[Unreleased]: https://github.com/hlavacm/ccc-review/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/hlavacm/ccc-review/releases/tag/v1.0.0

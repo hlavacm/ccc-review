@@ -4,14 +4,11 @@
 import { text } from "node:stream/consumers";
 import {
 	answerLogin,
-	type FakeLogin,
 	type FakeProcessStep,
 	play,
 	takeStep,
 	writeStdout,
 } from "./fake-cli-lib.ts";
-
-export type FakeClaudeLogin = FakeLogin;
 
 export interface FakeClaudeStep extends FakeProcessStep {
 	/** `structured_output` of a successful result. */
