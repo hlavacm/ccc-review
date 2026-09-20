@@ -25,6 +25,8 @@ First release.
   stable finding IDs (`CCC-001`, …) preserved across rounds.
 - Bounded loop: at most 3 rounds by default (`CCC_REVIEW_MAX_ROUNDS`), and one
   round per completion even when a completion event is delivered twice.
+- A completion that changed nothing since a clean activation (the writer only
+  asked a question) is not reviewed and uses no round.
 - Every reviewer failure (missing binary, no login, non-zero exit, timeout,
   invalid output, abort) stops the review and is never treated as approval.
 - An unreadable state file never wedges a session: `on` starts a fresh task and

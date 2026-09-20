@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { loadState, readHistory } from "../../src/core/state.ts";
@@ -193,6 +193,8 @@ describe("Codex → Claude workflow through the plugin hooks", () => {
 
 	it("missing claude binary fails fast with the default timeout and is not approval", () => {
 		prompt("$ccc-review on");
+		// The writer changed something; an unchanged clean tree is not reviewed.
+		writeFileSync(join(repo.root, "work.txt"), "work\n");
 		const started = Date.now();
 		const out = stop("done", false, {
 			PLUGIN_DATA: stateDir,
@@ -206,6 +208,8 @@ describe("Codex → Claude workflow through the plugin hooks", () => {
 	it("aborting the Stop hook kills the whole claude process group", async (t) => {
 		await claude.script({ sleepMs: 30_000, childSleepMs: 30_000 });
 		prompt("$ccc-review on");
+		// The writer changed something; an unchanged clean tree is not reviewed.
+		writeFileSync(join(repo.root, "work.txt"), "work\n");
 		const hook = spawn(
 			process.execPath,
 			[join(pluginRoot, "src/hosts/codex/cli.ts"), "stop"],

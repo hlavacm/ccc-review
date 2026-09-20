@@ -9,7 +9,8 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # Pinned: `ubuntu-latest` moves to 26.04 in late 2026 and says so on every run.
+    runs-on: ubuntu-26.04
     strategy:
       matrix:
         node: ["24"]

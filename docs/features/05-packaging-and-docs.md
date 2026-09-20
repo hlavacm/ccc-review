@@ -208,6 +208,8 @@ Suite: 331 deterministic tests (103 unit, 228 integration), all passing; `pnpm c
 
 - `pnpm test:smoke:install` passed against the real CLIs on the pushed commit `0278b4a` (validate; install, run the installed hooks, upgrade and uninstall for both CLIs), and the two usage-consuming smoke suites ran only with `CCC_REVIEW_SMOKE=1`. Tag `v1.0.0` points at that commit.
 
+- 2026-09-20: the runner is pinned to `ubuntu-26.04` (available now; `ubuntu-latest` moves there in late 2026 and annotated every run with that notice). Bump it when a newer LTS image is wanted.
+
 ### Ideas for v2 (only if real use asks for them)
 
 - Publish the marketplace from GitHub (`claude plugin marketplace add owner/repo`, `codex plugin marketplace add owner/repo`) and tag releases with `claude plugin tag`.

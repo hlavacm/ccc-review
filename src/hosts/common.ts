@@ -362,6 +362,12 @@ export async function reviewCompletion(
 	const { session, state } = await currentTask(c, roles, sessionId);
 	if (!session || !state?.active) return undefined;
 
+	if (await unchangedSinceCleanActivation(state))
+		return {
+			systemMessage:
+				"CCC Review: nothing has changed in the repository since review was enabled, so this completion was not reviewed and no round was used.",
+		};
+
 	// Exclusive create claims the event atomically, so duplicate or concurrent
 	// deliveries of it never start a second round.
 	const claims = claimsDir(c, state.taskId);
@@ -406,6 +412,24 @@ export async function reviewCompletion(
 			reason: auditFeedback(next.lastResult, next.reviewer),
 		};
 	return stopOutput(outcome, next);
+}
+
+/**
+ * A writer that only asked the user a question changed nothing; reviewing that
+ * spends a round and, worse, pushes the writer on without the user's answer.
+ * Only the provable case is skipped: a tree that was clean at activation, the
+ * same HEAD and a clean tree now. A dirty baseline is always reviewed, because
+ * an edit to an already-dirty file does not show in `git status`.
+ */
+async function unchangedSinceCleanActivation(s: TaskState): Promise<boolean> {
+	if (s.baseline.status.length > 0) return false;
+	try {
+		const now = await captureBaseline(s.baseline.root);
+		return now.headSha === s.baseline.headSha && now.status.length === 0;
+	} catch {
+		// Let the review run and fail properly, recorded as a reviewer error.
+		return false;
+	}
 }
 
 export function stopOutput(

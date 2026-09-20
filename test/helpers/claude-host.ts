@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadState, type TaskState } from "../../src/core/state.ts";
 import {
@@ -12,6 +12,14 @@ import {
  * Claude Code writes to a hook's stdin) for one session.
  */
 export class ClaudeHostHarness {
+	/**
+	 * A writer that finishes has normally changed something, and a completion
+	 * that changed nothing since a clean activation is not reviewed: by default
+	 * `stop()` first touches a file, like the writer's work. Turn it off to
+	 * leave the repository exactly as the test made it.
+	 */
+	simulateWork = true;
+	private workCount = 0;
 	readonly sessionId: string;
 	readonly config: HostConfig;
 	readonly cwd: string;
@@ -62,10 +70,15 @@ export class ClaudeHostHarness {
 	}
 
 	/** Claude finished a turn. */
-	stop(
+	async stop(
 		lastMessage: string,
 		stopHookActive = false,
 	): Promise<HookOutput | undefined> {
+		if (this.simulateWork)
+			await writeFile(
+				join(this.cwd, "writer-work.txt"),
+				`${++this.workCount}\n`,
+			);
 		return this.send("stop", {
 			...this.common("Stop"),
 			stop_hook_active: stopHookActive,

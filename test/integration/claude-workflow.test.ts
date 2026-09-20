@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { loadState, readHistory } from "../../src/core/state.ts";
@@ -273,6 +273,8 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 			env,
 		);
 		const started = Date.now();
+		// The writer changed something; an unchanged clean tree is not reviewed.
+		writeFileSync(join(repo.root, "work.txt"), "work\n");
 		const out = runPluginHook(
 			"Stop",
 			{
@@ -300,6 +302,8 @@ describe("Claude → Codex workflow through the plugin hooks", () => {
 			},
 			env,
 		);
+		// The writer changed something; an unchanged clean tree is not reviewed.
+		writeFileSync(join(repo.root, "work.txt"), "work\n");
 		const hook = spawn(
 			process.execPath,
 			[join(pluginRoot, "src/hosts/claude-code/cli.ts"), "stop"],

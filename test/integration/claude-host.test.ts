@@ -277,6 +277,7 @@ describe("Claude Code host", () => {
 			repo.git("add", "app.ts");
 			const before = await captureBaseline(repo.root);
 			await setup([{ output: changesRequested() }, { rawOutput: "bad" }]);
+			host.simulateWork = false;
 			await host.command("on");
 			await host.stop("a");
 			await host.stop("b");

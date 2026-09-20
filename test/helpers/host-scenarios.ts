@@ -33,6 +33,8 @@ export interface ScenarioHost {
 		stopHookActive?: boolean,
 	): Promise<HookOutput | undefined>;
 	state(): Promise<TaskState | undefined>;
+	/** `stop()` first touches a file, like a writer's work; false = leave the repository alone. */
+	simulateWork: boolean;
 }
 
 export interface Direction {
@@ -124,6 +126,71 @@ export function hostScenarios(d: Direction): void {
 				/status: active[\s\S]*round: 0\/3/,
 			);
 			assert.equal(await calls(), 0);
+		});
+
+		// Real use, both hosts: the writer only asked the user a question, and the
+		// review spent a round and pushed the writer on without the user's answer.
+		it("a completion that changed nothing since a clean activation is not reviewed", async () => {
+			await setup([approved()]);
+			host.simulateWork = false;
+			await host.command("on");
+			const asked = await host.stop("Shall I proceed? Reply yes.");
+			assert.equal(asked?.decision, undefined);
+			assert.match(asked?.systemMessage ?? "", /nothing has changed/);
+			assert.equal(await calls(), 0);
+			const state = await host.state();
+			assert.equal(state?.active, true);
+			assert.equal(state?.round, 0);
+			// Asked again with the same words: still not a claimed completion.
+			assert.match(
+				(await host.stop("Shall I proceed? Reply yes."))?.systemMessage ?? "",
+				/nothing has changed/,
+			);
+
+			await repo.write("app.ts", "export const x = 2;\n");
+			assert.match(
+				(await host.stop("Done."))?.systemMessage ?? "",
+				/APPROVED \(round 1\/3\)/,
+			);
+			assert.equal(await calls(), 1);
+		});
+
+		it("a commit since activation is a change, even with a clean tree", async () => {
+			await setup([approved()]);
+			host.simulateWork = false;
+			await host.command("on");
+			await repo.commitFile("b.ts", "export const b = 1;\n");
+			assert.match(
+				(await host.stop("Committed."))?.systemMessage ?? "",
+				/APPROVED/,
+			);
+			assert.equal(await calls(), 1);
+		});
+
+		it("a tree that was dirty at activation is always reviewed", async () => {
+			await setup([approved()]);
+			host.simulateWork = false;
+			await repo.write("app.ts", "export const x = 2;\n");
+			await host.command("on");
+			assert.match(
+				(await host.stop("Nothing new."))?.systemMessage ?? "",
+				/APPROVED/,
+			);
+			assert.equal(await calls(), 1);
+		});
+
+		it("a repository that is gone fails the review, never approves or skips it", async () => {
+			await setup([approved()]);
+			host.simulateWork = false;
+			await host.command("on");
+			await repo.dispose();
+			const out = await host.stop("done");
+			assert.equal(out?.decision, undefined);
+			assert.match(
+				out?.systemMessage ?? "",
+				/FAILED — the change is NOT approved/,
+			);
+			assert.equal((await host.state())?.active, false);
 		});
 
 		it("first-round approval ends the loop", async () => {
@@ -436,6 +503,7 @@ export function hostScenarios(d: Direction): void {
 
 			it("never mutates Git state", async () => {
 				await setup([changesRequested()]);
+				host.simulateWork = false;
 				await repo.write("app.ts", "export const x = 2;\n");
 				repo.git("add", "app.ts");
 				await repo.write("new.ts", "y\n");
@@ -524,6 +592,7 @@ export function hostScenarios(d: Direction): void {
 
 		it("the whole flow never mutates Git state", async () => {
 			await setup([changesRequested(), approved()]);
+			host.simulateWork = false;
 			await repo.write("dirty.txt", "x\n");
 			await repo.write("app.ts", "export const x = 5;\n");
 			repo.git("add", "app.ts");

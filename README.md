@@ -437,9 +437,11 @@ data directory, unless you set `CCC_REVIEW_STATE_DIR`).
 - A completion is identified by its final message (in Codex, `turn_id` plus
   final message), so an identical completion delivered again is not reviewed
   twice.
-- Every completion while review is on costs one round, including a turn in
-  which the writer only asks you a question. Answer it and the next completion
-  is reviewed again; raise `CCC_REVIEW_MAX_ROUNDS` if that happens often.
+- A completion that changed nothing is not reviewed and costs no round, so a
+  writer that only asks you a question is not pushed on by the reviewer. This
+  is detected only when it can be proven: the tree was clean at `on`, `HEAD`
+  is the same and the tree is clean now. If the tree was already dirty at
+  `on`, every completion is reviewed, including a question.
 - Files dirty before `on` are listed for the reviewer but not attributed line
   by line.
 - Claude Code does not document the `command_name` a hook gets for a plugin
