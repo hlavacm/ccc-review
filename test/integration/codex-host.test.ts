@@ -28,6 +28,7 @@ const CODEX_OUTPUT_KEYS = [
 	"systemMessage",
 	"decision",
 	"reason",
+	"hookSpecificOutput",
 ];
 
 function assertCodexOutput(out: HookOutput | undefined): void {
@@ -111,14 +112,31 @@ describe("Codex host", () => {
 
 		it("`current` reaches the model (its skill writes the report); the rest stays blocked", async () => {
 			await repo.write("app.ts", "export const x = 2;\n");
-			assert.equal(await host.command("current check the maths"), undefined);
+			// Real use: Codex did not load the skill text for a typed mention
+			// ("skill is not available"), so the hook hands over the instructions.
+			const armed = await host.command("current check the maths");
+			assert.deepEqual(Object.keys(armed ?? {}), ["hookSpecificOutput"]);
+			assert.equal(
+				armed?.hookSpecificOutput?.hookEventName,
+				"UserPromptSubmit",
+			);
+			const context = armed?.hookSpecificOutput?.additionalContext ?? "";
+			for (const needle of [
+				/independent reviewer \(Claude Code\)/,
+				/\*\*Task\*\*/,
+				/\*\*Plan\*\*/,
+				/\*\*Report\*\*/,
+				/Do not modify any files/,
+				/not a review of your own/,
+			])
+				assert.match(context, needle);
 			assert.equal((await host.state())?.maxRounds, 1);
 			assert.equal((await host.command("status"))?.decision, "block");
 			assert.equal((await host.command("off"))?.decision, "block");
 			// The plugin-namespaced mention works as well.
-			assert.equal(
-				await host.command("current", "$ccc-review:ccc-review"),
-				undefined,
+			assert.ok(
+				(await host.command("current", "$ccc-review:ccc-review"))
+					?.hookSpecificOutput,
 			);
 			await host.command("off");
 			// Refused: blocked, so the skill never asks Codex for a report.

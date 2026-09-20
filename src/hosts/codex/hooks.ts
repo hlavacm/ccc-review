@@ -7,6 +7,7 @@ import {
 	DEFAULT_CLAUDE_TIMEOUT_MS,
 } from "../../reviewers/claude.ts";
 import {
+	auditInstructions,
 	type HookOutput,
 	type HostConfig,
 	oneOf,
@@ -85,8 +86,15 @@ export async function handlePromptSubmit(
 			input.cwd,
 			(command[1] ?? "").trim(),
 		);
-		// undefined: an armed `current` lets the skill mention reach Codex.
-		return reason === undefined ? undefined : { decision: "block", reason };
+		if (reason !== undefined) return { decision: "block", reason };
+		// An armed `current` goes on to Codex with what to write. Codex did not
+		// load the skill text for a typed mention, so the hook supplies it.
+		return {
+			hookSpecificOutput: {
+				hookEventName: "UserPromptSubmit",
+				additionalContext: auditInstructions(ROLES.reviewer),
+			},
+		};
 	}
 	if (!prompt || input.agent_id !== undefined) return undefined;
 	await recordPrompt(c, ROLES, input.session_id, prompt);

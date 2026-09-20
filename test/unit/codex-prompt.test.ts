@@ -60,6 +60,7 @@ describe("buildReviewPrompt", () => {
 			}),
 		);
 		assert.match(p, /ALREADY dirty/);
+		assert.match(p, /summary to at most three sentences/);
 		assert.doesNotMatch(p, /one-off audit/);
 		assert.match(p, / {2}\?\? a file\.txt/);
 		assert.match(p, /R {2}old\.ts -> new\.ts/);

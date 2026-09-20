@@ -193,6 +193,19 @@ export function hostScenarios(d: Direction): void {
 			assert.equal((await host.state())?.active, false);
 		});
 
+		// Real use: a reviewer's summary can be a whole paragraph with bullets.
+		it("status shows the first line of a long summary; the result message shows all", async () => {
+			await setup([
+				{ ...approved(), summary: "All good.\n\n- detail one\n- detail two" },
+			]);
+			await host.command("on");
+			const out = await host.stop("Done.");
+			assert.match(out?.systemMessage ?? "", /All good\.[\s\S]*detail two/);
+			const status = (await host.command("status"))?.reason ?? "";
+			assert.match(status, /last verdict: APPROVED — All good\. …\n/);
+			assert.doesNotMatch(status, /detail one/);
+		});
+
 		it("first-round approval ends the loop", async () => {
 			await setup([approved()]);
 			await host.command("on Make x 2");
@@ -387,11 +400,10 @@ export function hostScenarios(d: Direction): void {
 				await setup([approved()]);
 				await repo.write("app.ts", "export const x = 2;\n");
 				await repo.write("new.ts", "export const y = 1;\n");
-				// Not blocked: the skill text must reach the writer.
-				assert.equal(
-					await host.command("current was asked to make x 2"),
-					undefined,
-				);
+				// Not blocked: the writer must get to write its report.
+				const armedOut = await host.command("current was asked to make x 2");
+				assert.equal(armedOut?.decision, undefined);
+				assert.equal(armedOut?.systemMessage, undefined);
 				const armed = await host.state();
 				assert.equal(armed?.active, true);
 				assert.equal(armed?.maxRounds, 1);

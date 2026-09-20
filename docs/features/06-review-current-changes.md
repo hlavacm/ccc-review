@@ -2,7 +2,7 @@
 
 ## Status
 
-DONE — acceptance criteria covered by the deterministic suite and checked in real Claude Code with the real Codex reviewer (approval and findings). `$ccc-review current` in the interactive Codex TUI is not yet exercised (same limitation as feature 04).
+DONE — acceptance criteria covered by the deterministic suite and checked in real Claude Code with the real Codex reviewer (approval and findings). `$ccc-review current` ran in the real Codex TUI too; the fix it led to (instructions from the hook) still has to be re-checked there.
 
 ## Objective
 
@@ -86,4 +86,6 @@ Real use (2026-09-19, Claude Code 2.1.278, real Codex, disposable repo, `claude 
 
 Findings path, same day: a `divide = (a, b) => a * b` was planted by hand, then `/ccc-review:current přidal jsem divide(a, b), má dělit`. Claude reported that the user had made the change and that it had run no tests. Codex returned `CCC-001 [high] math.js:3` (verified by running it: `divide(6, 3)` is 18). Claude presented the finding with its own assessment, added a point Codex had not raised (division by zero), stated that it had modified no files and asked what to fix; no second review ran. Claude Code labels the returned findings "Stop hook error:", which is its wording for any blocking Stop hook. With `CCC_REVIEW_CODEX_BIN=/nonexistent`, `/ccc-review:current` was refused and blocked ("not enabled: codex executable not found"), so Claude wrote no report. Still to exercise: `$ccc-review current` in the Codex TUI.
 
-Limits: only uncommitted work; the task/plan part is the writer's own summary (the reviewer is told to treat the report as unverified); if the hooks are not installed the skill still makes the writer write a report and nothing follows. In Codex it relies on the skill mention loading the skill text, which was not exercised in the real TUI.
+Real Codex TUI (2026-09-20, codex-cli 0.155.1): `$ccc-review current přidal jsem divide(a, b), má dělit` was not blocked, the Claude reviewer audited the planted bug (`CCC-001 [high] math.js:3`, `CCC-002` missing test), Codex presented both findings with its own assessment and changed nothing (`git diff --stat`: only the user's two lines). But Codex said "the ccc-review skill is not available" and wrote a short review of its own instead of Task/Plan/Report: the session record shows that Codex neither lists the skill for the model (`allow_implicit_invocation: false`) nor injected its text for the typed mention. Fixed: the Codex hook now returns the instructions itself as `hookSpecificOutput.additionalContext` (supported for `UserPromptSubmit`, checked in `codex-rs/hooks/src/events/user_prompt_submit.rs`), from `auditInstructions()` in `common.ts`, which also says that the message is a report, not the writer's own review. `codex-host.test.ts` "`current` reaches the model…" asserts the exact output keys and the content. Claude Code keeps using the skill text, which worked in real use.
+
+Limits: only uncommitted work; the task/plan part is the writer's own summary (the reviewer is told to treat the report as unverified); if the hooks are not installed the skill still makes the writer write a report and nothing follows.

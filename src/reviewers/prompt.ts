@@ -74,6 +74,7 @@ export function buildReviewPrompt(
 		"- Report only material issues: correctness bugs, regressions, security issues, data-loss risk, concurrency problems, API contract violations, materially missing error handling or tests, report claims contradicted by the repository.",
 		"- Do not report style preferences, formatting, unrelated refactors, speculative issues or micro-optimizations.",
 		"- Give concrete evidence (file, line, what goes wrong) for every finding.",
+		"- Keep the summary to at most three sentences; details belong in the findings.",
 		"- Verdict: APPROVED when there are no material issues; CHANGES_REQUESTED with at least one finding; NEEDS_HUMAN when a human decision is required (e.g. ambiguous requirements).",
 		"",
 		`Review round: ${request.round}`,

@@ -246,8 +246,9 @@ CCC Review audit: Codex requested changes.
 … Claude presents the findings with its own assessment and changes nothing …
 ```
 
-- The command is not blocked like the others: its skill asks the writer to
-  write down the task, its plan and its report, because only the writer knows
+- The command is not blocked like the others: the writer is asked (by the
+  skill in Claude Code, by the hook in Codex) to write down the task, its plan
+  and its report, because only the writer knows
   them. That message and the real Git changes go to the reviewer. This is also
   the only way the writer's plan reaches the reviewer.
 - It reviews the uncommitted changes only (staged, unstaged, untracked) and
@@ -451,8 +452,6 @@ data directory, unless you set `CCC_REVIEW_STATE_DIR`).
 - Codex does not document whether the TUI delivers a skill mention as the
   literal `$ccc-review`. If the hook does not handle it, the `ccc-review` skill tells you
   that review was NOT enabled.
-- An armed `$ccc-review current` relies on Codex loading the skill text for the
-  mention; that was not exercised in the real Codex TUI.
 - The interactive TUIs are covered by hook-level tests and smoke tests, not by
   an automated TUI session.
 

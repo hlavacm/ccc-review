@@ -217,6 +217,14 @@ Claude reviewer: missing executable, not logged in (activation and review), hang
 
 - 2026-09-19, after the first push (commit `0278b4a`): `pnpm test:smoke` passed again; the real Claude reviewer found the planted bug in 9 s and answered the Czech task in Czech.
 
+### Real Codex TUI (2026-09-20, codex-cli 0.155.1, plugin installed from the GitHub marketplace)
+
+- The skill mention reaches `UserPromptSubmit` literally: `$ccc-review status`, `$ccc-review:ccc-review` and `$ccc-review on <task>` were blocked by the hook with the expected text and the model was not called. A prompt without `$` (`ccc-review status`) is an ordinary prompt, as intended. Codex's `$` picker lists skills, so it offers `ccc-review` only; `on|current|off|status` are its arguments.
+- `on` → Codex first asked for confirmation and changed nothing → "nothing has changed … not reviewed and no round was used" (the fix recorded in feature 03) → after "ano" Codex implemented the task → the real Claude reviewer ran from the Stop hook: `Claude APPROVED (round 1/3)`, noting itself that it could not run the tests (read-only) → `status` showed `on`, `round 1: APPROVED`.
+- An earlier run, before that fix, returned three findings (`CCC-001..003`, in the task's language) for the unanswered question, which is what exposed the problem.
+- Upgrading: `codex plugin marketplace add` on an already added marketplace does not refresh it; `codex plugin marketplace upgrade hlavacm` followed by `codex plugin add` does, as the README says.
+- Observed: the Claude reviewer's summary was a paragraph with bullets, which flooded `status`. `status` now shows the first line and the prompt asks for at most three sentences (`host-scenarios.ts` "status shows the first line of a long summary…", `codex-prompt.test.ts`).
+
 ### Limitations
 
 - The real Codex TUI was not driven: whether a plugin skill mention reaches `UserPromptSubmit` as the literal text `$ccc-review` (vs `$ccc-review:ccc-review`) and whether a continuation keeps `turn_id` are undocumented. Both spellings are accepted, and the claim key does not depend on `turn_id` alone. Payloads follow `schema.rs`.

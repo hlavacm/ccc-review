@@ -35,6 +35,8 @@ export interface HookOutput {
 	decision?: "block";
 	reason?: string;
 	systemMessage?: string;
+	/** Text the host adds to the prompt for the model. */
+	hookSpecificOutput?: { hookEventName: string; additionalContext: string };
 }
 
 export interface HostConfig {
@@ -316,6 +318,12 @@ function historyLine(e: HistoryEntry, audit: boolean): string {
 	return `  ${at} round ${e.round}: ${what}${stop}`;
 }
 
+/** Status stays scannable; the full summary was shown when the round ended. */
+function firstLine(text: string): string {
+	const [first = "", ...rest] = text.trim().split("\n");
+	return rest.length > 0 ? `${first} …` : first;
+}
+
 function describe(s: TaskState): string {
 	const b = s.baseline;
 	const lines = [
@@ -326,7 +334,7 @@ function describe(s: TaskState): string {
 	];
 	if (s.lastResult)
 		lines.push(
-			`last verdict: ${s.lastResult.verdict} — ${s.lastResult.summary}`,
+			`last verdict: ${s.lastResult.verdict} — ${firstLine(s.lastResult.summary)}`,
 		);
 	if (s.lastError) lines.push(`last error: ${s.lastError}`);
 	return lines.join("\n");
@@ -484,6 +492,23 @@ export function findingLines(findings: Finding[]): string[] {
 function resultText(r: ReviewResult | undefined): string {
 	if (!r) return "";
 	return [r.summary, ...findingLines(r.findings)].join("\n");
+}
+
+/**
+ * What the writer must write once `current` is armed. Claude Code gets it as
+ * the skill text; Codex gets it from the hook, because Codex does not reliably
+ * load a skill for a typed `$` mention.
+ */
+export function auditInstructions(reviewer: Agent): string {
+	return [
+		`An independent reviewer (${reviewer === "claude" ? "Claude Code" : "Codex"}) is about to audit the uncommitted changes in this repository. CCC Review sends it your next final message together with the real Git changes, so write that message now for someone who has not seen this conversation:`,
+		"",
+		"1. **Task**: what the user asked for, in their words where possible.",
+		"2. **Plan**: the approach you chose and why, including decisions and trade-offs.",
+		"3. **Report**: what you actually changed (files), what you verified and how, and what is still open or untested.",
+		"",
+		"Include any note the user wrote after `current`. This is a report for the reviewer, not a review of your own: be factual and do not claim checks you did not run. Do not modify any files and do not run anything that changes the repository. Then end your turn; the audit starts when you finish.",
+	].join("\n");
 }
 
 export function auditFeedback(r: ReviewResult, reviewer: Agent): string {
