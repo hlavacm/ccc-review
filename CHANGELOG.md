@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-09-21
+
+### Fixed
+
+- `current`: an audit that ended without findings (approval, a needed human
+  decision or a reviewer failure) was reported only in a `systemMessage`,
+  which the writer never sees, so the writer told the user that no answer had
+  come. Every audit result now goes back to the writer, which presents it.
+
 ## [1.0.0] - 2026-09-20
 
 First release.
@@ -47,4 +56,5 @@ First release.
   temporary Git repositories, fake `claude`/`codex` executables, host
   harnesses), plus opt-in smoke tests against the real CLIs.
 
+[1.0.1]: https://github.com/hlavacm/ccc-review/releases/tag/v1.0.1
 [1.0.0]: https://github.com/hlavacm/ccc-review/releases/tag/v1.0.0

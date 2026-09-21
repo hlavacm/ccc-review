@@ -419,7 +419,13 @@ export async function reviewCompletion(
 			decision: "block",
 			reason: auditFeedback(next.lastResult, next.reviewer),
 		};
-	return stopOutput(outcome, next);
+	const out = stopOutput(outcome, next);
+	// The user asked for this audit and waits for its answer, but a
+	// `systemMessage` never reaches the writer, which then tells the user that
+	// no answer came. Every audit result goes to the writer to present.
+	if (session.audit && out?.systemMessage)
+		return { decision: "block", reason: auditResult(out.systemMessage) };
+	return out;
 }
 
 /**
@@ -508,6 +514,17 @@ export function auditInstructions(reviewer: Agent): string {
 		"3. **Report**: what you actually changed (files), what you verified and how, and what is still open or untested.",
 		"",
 		"Include any note the user wrote after `current`. This is a report for the reviewer, not a review of your own: be factual and do not claim checks you did not run. Do not modify any files and do not run anything that changes the repository. Then end your turn; the audit starts when you finish.",
+	].join("\n");
+}
+
+/** An audit result without findings to assess: approval, needs human, failure. */
+export function auditResult(message: string): string {
+	return [
+		message,
+		"",
+		"This was a one-off audit of the uncommitted changes; nothing will be reviewed again.",
+		"Tell the user this result now, as it is: do not turn a failure or an open question into approval.",
+		"Do NOT modify any files now.",
 	].join("\n");
 }
 

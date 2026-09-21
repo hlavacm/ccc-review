@@ -1,6 +1,6 @@
 {
 	"name": "ccc-review",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "CCC Review (Claude Code ↔ Codex Review): Claude Code independently reviews Codex's changes; findings go back to Codex in a bounded loop.",
 	"author": {
 		"name": "Martin Hlaváč"

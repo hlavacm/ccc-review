@@ -415,12 +415,18 @@ export function hostScenarios(d: Direction): void {
 				const out = await host.stop(
 					"Task: make x 2. Plan: edit app.ts. Report: done.",
 				);
-				assert.equal(out?.decision, undefined);
+				// systemMessage never reaches the writer, which would then tell the
+				// user that no answer came: the result goes to the writer to present.
+				assert.equal(out?.decision, "block");
 				assert.match(
-					out?.systemMessage ?? "",
-					new RegExp(`${d.reviewer} APPROVED`),
+					out?.reason ?? "",
+					new RegExp(`${d.reviewer} APPROVED \\(round 1/1\\)`),
 				);
+				assert.match(out?.reason ?? "", /Tell the user this result/);
+				assert.match(out?.reason ?? "", /Do NOT modify any files/);
 				assert.equal((await host.state())?.active, false);
+				// The writer presents it and finishes: no re-review.
+				assert.equal(await host.stop("Codex approved.", true), undefined);
 				const [call] = (await env?.calls()) ?? [];
 				assert.match(call?.stdin ?? "", /one-off audit/);
 				assert.match(call?.stdin ?? "", /uncommitted changes/);
@@ -492,11 +498,9 @@ export function hostScenarios(d: Direction): void {
 				await repo.write("app.ts", "export const x = 2;\n");
 				await host.command("current");
 				const out = await host.stop("report");
-				assert.equal(out?.decision, undefined);
-				assert.match(
-					out?.systemMessage ?? "",
-					/FAILED — the change is NOT approved/,
-				);
+				assert.equal(out?.decision, "block");
+				assert.match(out?.reason ?? "", /FAILED — the change is NOT approved/);
+				assert.doesNotMatch(out?.reason ?? "", /APPROVED \(/);
 				assert.equal((await host.state())?.lastResult, undefined);
 			});
 
