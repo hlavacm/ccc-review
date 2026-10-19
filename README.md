@@ -10,7 +10,7 @@ Use Claude Code to implement and Codex to review,
 or Codex to implement and Claude Code to review.
 
 [![CI](https://github.com/hlavacm/ccc-review/actions/workflows/ci.yml/badge.svg)](https://github.com/hlavacm/ccc-review/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-1.0.1-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.0.2-blue)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2024-339933?logo=nodedotjs&logoColor=white)](#requirements)
 [![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-D97757)](#claude-code-claude-writes-codex-reviews)

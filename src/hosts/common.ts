@@ -112,16 +112,22 @@ async function loadSession(
 	c: HostConfig,
 	sessionId: unknown,
 ): Promise<Session | undefined> {
+	const file = sessionFile(c, sessionId);
 	let raw: string;
 	try {
-		raw = await readFile(sessionFile(c, sessionId), "utf8");
+		raw = await readFile(file, "utf8");
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
 		throw error;
 	}
-	const data = JSON.parse(raw) as Partial<Session>;
-	if (typeof data.taskId !== "string" || !Array.isArray(data.prompts))
-		throw new Error("corrupt CCC Review session file");
+	let data: Partial<Session>;
+	try {
+		data = JSON.parse(raw);
+	} catch {
+		throw new Error(`corrupt CCC Review session file ${file}: invalid JSON`);
+	}
+	if (typeof data?.taskId !== "string" || !Array.isArray(data.prompts))
+		throw new Error(`corrupt CCC Review session file ${file}`);
 	return {
 		taskId: data.taskId,
 		prompts: data.prompts.map(String),

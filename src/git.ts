@@ -105,7 +105,9 @@ export const MAX_CHANGES_CHARS = 200_000;
 /**
  * The changes since `baseline`, as text for a reviewer that cannot run
  * commands: commits, the changed files, the diff against the activation
- * HEAD and untracked files. Read-only; diff drivers and textconv filters are not run.
+ * HEAD and untracked files. Read-only; external diff drivers and textconv are
+ * not run. Clean/process filters from the Git config (e.g. Git LFS) are, as
+ * the diff would be wrong without them.
  */
 export async function describeChanges(
 	baseline: GitBaseline,

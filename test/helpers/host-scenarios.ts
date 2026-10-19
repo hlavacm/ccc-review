@@ -562,6 +562,11 @@ export function hostScenarios(d: Direction): void {
 					const out = await host.stop("done");
 					assert.equal(out?.decision, undefined);
 					assert.match(out?.systemMessage ?? "", /CCC Review error/);
+					// Names the broken file, not a bare JSON.parse message.
+					assert.match(
+						out?.systemMessage ?? "",
+						new RegExp(`corrupt .*file .*${kind}.*: invalid JSON`),
+					);
 					assert.doesNotMatch(out?.systemMessage ?? "", /APPROVED/);
 					assert.equal(await calls(), 0);
 					const status = await host.command("status");

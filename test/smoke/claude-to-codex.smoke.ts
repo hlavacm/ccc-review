@@ -33,6 +33,8 @@ describe("real Codex review of a Claude completion (smoke)", {
 			configFromEnv({ ...process.env, CCC_REVIEW_STATE_DIR: stateDir }),
 			repo.root,
 		);
+		// The test does the writer's work itself: no simulated work file.
+		host.simulateWork = false;
 		const on = await host.command(
 			"on Add a multiply(a, b) function to math.js",
 		);

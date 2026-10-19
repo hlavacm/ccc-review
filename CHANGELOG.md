@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-10-19
+
+### Changed
+
+- An unreadable session file is reported with its path ("corrupt CCC Review
+  session file …: invalid JSON") instead of a bare JSON parser error.
+- Documentation: Git runs no fsmonitor, external diff or textconv program a
+  repository configures, but clean/process filters from the Git config (e.g.
+  Git LFS) do run when the Claude reviewer's diff is collected; the 1.0.0
+  notes did not say so.
+
 ## [1.0.1] - 2026-09-21
 
 ### Fixed
@@ -56,5 +67,6 @@ First release.
   temporary Git repositories, fake `claude`/`codex` executables, host
   harnesses), plus opt-in smoke tests against the real CLIs.
 
+[1.0.2]: https://github.com/hlavacm/ccc-review/releases/tag/v1.0.2
 [1.0.1]: https://github.com/hlavacm/ccc-review/releases/tag/v1.0.1
 [1.0.0]: https://github.com/hlavacm/ccc-review/releases/tag/v1.0.0

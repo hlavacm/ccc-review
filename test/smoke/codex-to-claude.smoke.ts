@@ -34,6 +34,8 @@ describe("real Claude review of a Codex completion (smoke)", {
 			configFromEnv({ ...process.env, CCC_REVIEW_STATE_DIR: stateDir }),
 			repo.root,
 		);
+		// The test does the writer's work itself: no simulated work file.
+		host.simulateWork = false;
 		// Czech task, English report: findings must come back in the task's language.
 		const on = await host.command(
 			"on Přidej do math.js funkci multiply(a, b), která vrací součin",
